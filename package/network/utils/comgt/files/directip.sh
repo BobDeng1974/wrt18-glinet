@@ -15,19 +15,17 @@ proto_directip_init_config() {
 	proto_config_add_string "auth"
 	proto_config_add_string "username"
 	proto_config_add_string "password"
-	proto_config_add_defaults
 }
 
 proto_directip_setup() {
 	local interface="$1"
 	local chat devpath devname
 
-	local device apn pincode ifname auth username password $PROTO_DEFAULT_OPTIONS
-	json_get_vars device apn pincode auth username password $PROTO_DEFAULT_OPTIONS
+	local device apn pincode ifname auth username password
+	json_get_vars device apn pincode auth username password
 
 	[ -n "$ctl_device" ] && device=$ctl_device
 
-	device="$(readlink -f $device)"
 	[ -e "$device" ] || {
 		proto_notify_error "$interface" NO_DEVICE
 		proto_set_available "$interface" 0
@@ -44,7 +42,8 @@ proto_directip_setup() {
 		return 1
 	}
 
-	gcom -d "$device" -s /etc/gcom/getcardinfo.gcom | grep -q "Sierra Wireless" || {
+	cardinfo=$(gcom -d "$device" -s /etc/gcom/getcardinfo.gcom)
+	[ -n $(echo "$cardinfo" | grep -q "Sierra Wireless") ] || {
 		proto_notify_error "$interface" BAD_DEVICE
 		proto_block_restart "$interface"
 		return 1
@@ -81,15 +80,12 @@ proto_directip_setup() {
 	json_add_string name "${interface}_4"
 	json_add_string ifname "@$interface"
 	json_add_string proto "dhcp"
-	proto_add_dynamic_defaults
 	ubus call network add_dynamic "$(json_dump)"
 
 	json_init
 	json_add_string name "${interface}_6"
 	json_add_string ifname "@$interface"
 	json_add_string proto "dhcpv6"
-	json_add_string extendprefix 1
-	proto_add_dynamic_defaults
 	ubus call network add_dynamic "$(json_dump)"
 
 	return 0

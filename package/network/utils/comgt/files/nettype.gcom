@@ -1,0 +1,20 @@
+opengt
+set com 115200n81
+set senddelay 0.05
+
+:start
+	waitquiet 1 0.2
+	send "AT+PSRAT^m"
+	get 2 "^m" $s
+	get 2 "^m" $s
+	let a=len($s)
+	let b=a-9
+	if b < 1 goto netnull
+	let $c=$right($s,b)
+	print $c
+	goto continue
+:netnull
+	print "netstatus=NONE\n"
+	exit 0
+:continue
+	exit 0

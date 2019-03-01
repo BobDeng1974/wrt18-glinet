@@ -1,4 +1,7 @@
 # Put your custom commands here that should be executed once
 # the system init finished. By default this file does nothing.
 
+enb="$(uci -q get netset.@netset[0].enable)"
+[ ${enb} = 0 ] && echo timer > /sys/class/leds/heart/trigger
+
 exit 0

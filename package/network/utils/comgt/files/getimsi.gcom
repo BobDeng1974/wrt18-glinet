@@ -12,6 +12,6 @@ opengt
  let x = len($s)
  if x<2 goto continue
  let $s = $right($s, x-1)
- print $s
+ print "imsi=",$s
 :continue
  exit 0

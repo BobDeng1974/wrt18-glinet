@@ -1,0 +1,21 @@
+opengt
+set com 115200n81
+set senddelay 0.05
+
+:start
+	waitquiet 1 0.2
+	send "AT+QNWINFO^m"
+	get 2 "^m" $s
+	get 2 "\"" $s
+	get 2 "\"" $s
+	get 2 "^m" $t
+	get 2 "\"" $t
+	get 2 "\"" $t
+	let a=len($t)
+	if a < 1 goto firstone
+	print $t,"\n"
+	exit 0
+:firstone
+	print $s,"\n"
+	exit 0
+

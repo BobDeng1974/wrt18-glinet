@@ -1,0 +1,25 @@
+opengt
+ set com 115200n81
+ set comecho off
+ set senddelay 0.02
+ waitquiet 0.2 0.2
+ flash 0.1
+
+:start
+ print "Trying to set cfun\n"
+ send "at+cfun=1^m"
+ waitfor 5 "OK","ERR","ERROR"
+ if % = 0 goto continue
+ if % = 1 goto cfunerr
+ if % = 2 goto cfunerr
+ 
+ print "Timeout setting cfun!\n"
+ exit 1
+
+:cfunerr
+ print "Error setting cfun!\n"
+ exit 1
+
+:continue
+ print "cfun=1 OK\n"
+ exit 0

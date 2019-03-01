@@ -6,9 +6,60 @@ opengt
  flash 0.1
 
 :start
- send "AT+CSQ^m"
- get 1 "" $s
- print $s
+	waitquiet 1 0.5
+	send "AT+PSRAT^m"
+	waitfor 5 "EVDO","CDMA","LTE","WCDMA","TDSCDMA"
+	if % = 0 goto evdo
+	if % = 1 goto cdma
+	if % = 2 goto csq
+	if % = 3 goto csq
+	if % = 4 goto csq
 
+:csq
+	waitquiet 1 0.1
+	send "AT+CSQ^m"
+	get 2 "^m" $s
+	get 2 ":" $s
+	get 2 "," $s
+	print $s
+	exit 0
+:cdma
+	waitquiet 1 0.1
+	send "AT+CCSQ^m"
+	get 2 "^m" $s
+	get 2 ":" $s
+	get 2 "," $s
+	print $s
+	exit 0
+:evdo
+	waitquiet 2 0.1
+	send "AT\^HDRCSQ^m"
+	waitfor 2 "ERROR","20","40","60","80","99"
+	if % = 0 goto level0
+	if % = 1 goto level1
+	if % = 2 goto level2
+	if % = 3 goto level3
+	if % = 4 goto level4
+	if % = 5 goto level5
+
+:level0
+	print "0"
+	exit 0
+:level1
+	print "15"
+	exit 0
+:level2
+	print "20"
+	exit 0
+:level3
+	print "24"
+	exit 0
+:level4
+	print "28"
+	exit 0
+:level5
+	print "30"
+	exit 0
 :continue
+ print "0"
  exit 0

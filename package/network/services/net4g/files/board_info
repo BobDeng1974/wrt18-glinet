@@ -1,0 +1,10 @@
+#key=val
+#key length <=64
+#line lenth <=128
+Default
+deviceid=4G-5350
+mac=12:22:33:44:55:66
+imei=468521111
+imsi=646465468464
+version=V10
+curtime=201512121515

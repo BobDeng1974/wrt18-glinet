@@ -8,13 +8,13 @@ opengt
     waitfor 5 "+CGATT: 1","+CGATT: 0"
     print "\n."
     if % = -1 goto error
-    if c > 10 goto toolong
+    if c > 5 goto toolong
     if % = 0 goto out
-    sleep 2
+    sleep 1
     if % = 1 goto loop
   :toolong
   exit 1
   :error
-  exit 0
+  exit 1
   :out
  exit 0

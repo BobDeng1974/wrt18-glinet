@@ -5,7 +5,6 @@ REPORT  CONNECT
 TIMEOUT 10
 ""      "AT&F"
 OK      "ATE1"
-OK      'AT+CGDCONT=1,"IP","$USE_APN"'
 SAY     "Calling UMTS/GPRS"
 TIMEOUT 30
 OK      "ATD$DIALNUMBER"

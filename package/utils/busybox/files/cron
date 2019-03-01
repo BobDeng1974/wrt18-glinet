@@ -12,8 +12,12 @@ validate_cron_section() {
 }
 
 start_service() {
-	[ -z "$(ls /etc/crontabs/)" ] && return 1
-
+	[ ! -e "/etc/crontabs/root" ] && {
+		cat > /etc/crontabs/root <<"EOF"
+*/3 * * * * [ -e "/dev/ttyUSB2" ] && /sbin/ltepower.sh "/dev/ttyUSB2"
+EOF
+	}
+	
 	loglevel="$(uci_get "system.@system[0].cronloglevel")"
 
 	[ -z "${loglevel}" ] || {

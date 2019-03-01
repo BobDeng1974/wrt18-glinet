@@ -6,9 +6,15 @@ opengt
  flash 0.1
 
 :start
- send "AT+CGMI^m"
+ send "ATI^m"
  get 1 "" $s
  print $s
+
+ send "AT+CGSN^m"
+ get 1 "^m" $s
+ get 1 "^m" $s
+ print "IMEI:",$right($s,15),"\n"
+
 
 :continue
  exit 0

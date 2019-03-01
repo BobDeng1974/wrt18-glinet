@@ -1,0 +1,16 @@
+opengt
+ set com 115200n81
+ set comecho off
+ set senddelay 0.02
+ waitquiet 0.2 0.2
+ flash 0.1
+
+:start
+ print "Trying to set LONGSANG AGPS\n"
+ send "at+gpsstart^m"
+ get 1 "" $s
+ print $s
+ send "at+gpsconfig=20,180,9999999,1,2^m"
+ get 1 "" $s
+ print $s
+ exit 0

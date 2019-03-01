@@ -1,0 +1,117 @@
+
+-----------------1------------------
+Router Register:
+{
+"type":"login",
+"seqnum":"1",
+"body":{
+	"deviceid":"4G",
+	"mac":"12:12:12:22:33:43",
+	"imei":"864944030305669",
+	"imsi":"460013635988698",
+	"curtime":"20151206121125",
+	"version":"V10"
+	}
+}
+Server response:
+{
+"respcode":"success/failure",
+"seqnum":"1",
+"respmsg":""
+}
+
+
+{"type":"gpsinfo","seqnum":"9",
+"body":{"gpsinfo":
+{"latitude":"","longitude":"","direction":"","speed":""},
+"netinfo":{"signal":"","netstatus":""},
+"gpioinfo":[{"gpionum":"","gpioname":"","direction":"","value":""}
+]}
+}
+
+
+-----------------2--------------------------
+Router send info every 30s:
+{
+"type":"boardinfo",
+"seqnum":"1",
+"body":{
+	"deviceid":"4G",
+	"gpsinfo":{
+		"latitute":"",
+		"longitute":"",
+		"speed":"",
+		"direction"
+	},
+	"netinfo":{
+		"signal":"23",
+		"netstatus":"3G/4G"
+	},
+	"gpiostatus":[
+		{"gpionum":"1","direction":"in","data":"high/low"},
+		{"gpionum":"2","direction":"out","data":"low"},
+		{"gpionum":"3","direction":"out","data":"low"},
+		{"gpionum":"4","direction":"in","data":"high"}
+	]
+	}
+}
+Do NOT need response!
+-----------------------------------------------
+
+
+------------------4-----------------------------
+Server send ota info:
+{
+"type":"ota",
+"seqnum":"1",
+"body":{
+	"url":"http://xx/xx",
+	"version":"V10",
+	"size":"567549",
+	"crc":"112233",
+	"md5":"ad34jfb234",
+	"buildtime":"20151206121125"
+	}
+}
+Router response:
+{
+"respcode":"ok/fail",
+"seqnum":"1",
+"respmsg":"download OK/fail"
+}
+
+-------------------5-----------------------------
+Server send time info:
+{
+    "type": "gpiotiming",
+    "seqnum": "1",
+    "body": {
+		"gpiomode":"auto",
+        "timerange": [
+            {
+			   "enb":"0",
+                "num": "1",
+                "st": "1300",
+                "ed": "1438"
+            },
+            {
+				"enb":"1",
+                "num": "2",
+                "st": "1303",
+                "ed": "1650"
+            }
+        ],
+        "gpioctrl": {
+			"gpioname":"hame:red:simcard",
+            "gpionum": "99",
+            "direction": "out",
+            "value": "1"
+        }
+    }
+}
+Response:
+{
+"respcode":"ok/fail",
+"seqnum":"1",
+"respmsg":""
+}

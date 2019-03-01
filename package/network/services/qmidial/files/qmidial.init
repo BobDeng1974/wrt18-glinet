@@ -1,0 +1,38 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2006-2011 OpenWrt.org
+
+START=80
+
+start() {
+	local eb
+	local apn
+	local user
+	local pwd
+	local auth
+	local pincode
+	local exe_cmd="/bin/qmidial"
+	
+	config_load qmicfg
+	config_get_bool eb qmicfg 'enable' 0
+	config_get_bool auth qmicfg 'auth' 0
+	config_get apn qmicfg 'APN'
+	config_get user qmicfg 'user'
+	config_get pwd qmicfg 'password'
+	config_get pincode qmicfg 'pincode'
+	echo "${eb},${apn},${user},${pwd},${auth},${pincode}"
+	
+	[ ${eb} -gt 0 ] && {
+		[ -n "$apn" ] && {
+			exe_cmd="$exe_cmd -s $apn"
+			[ -n "$user" -a -n "$pwd" -a -n ${auth} ] && exe_cmd="$exe_cmd $user $pwd $auth"
+		}
+		[ -n "$pincode" ] && exe_cmd="$exe_cmd -p $pincode"
+		echo "$exe_cmd"
+		exe_cmd="$exe_cmd &"
+		eval ${exe_cmd}
+	}
+}
+
+stop() {
+	killall -INT qmidial
+}

@@ -1,0 +1,68 @@
+opengt
+ set com 115200n81
+ set comecho off
+ set senddelay 0.02
+ waitquiet 1 0.2
+ flash 0.1
+:start
+ print "Auto setting APN First\n"
+ send "AT+QCIMI^m"
+ waitfor 3 "46000" "46002" "46007" "46001" "46006" "46003" "46005" "46011" "46004"
+ if % = -1 goto cimi
+ if % = 0 goto cmnet
+ if % = 1 goto cmnet
+ if % = 2 goto cmnet
+ if % = 3 goto net3g
+ if % = 4 goto net3g
+ if % = 5 goto ctlte
+ if % = 6 goto ctlte
+ if % = 7 goto ctlte
+ if % = 8 goto cmnet
+:cimi
+ waitquiet 1 0.2
+ send "AT+CIMI^m"
+ waitfor 3 "46000" "46002" "46007" "46001" "46006" "46003" "46005" "46011" "46004"
+ if % = -1 goto err
+ if % = 0 goto cmnet
+ if % = 1 goto cmnet
+ if % = 2 goto cmnet
+ if % = 3 goto net3g
+ if % = 4 goto net3g
+ if % = 5 goto ctlte
+ if % = 6 goto ctlte
+ if % = 7 goto ctlte
+ if % = 8 goto cmnet
+ # default
+ goto webset
+:err
+ exit 1
+:webset
+ let $x = $env("USE_APN")
+ send "AT+CGDCONT=1,\"IP\",\""
+ send $x
+ send "\"^m"
+ goto waitret
+:cmnet
+ send "AT+CGDCONT=1,\"IP\",\"CMNET\"^m"
+ print "CMNET\n"
+ goto waitret
+:net3g
+ send "AT+CGDCONT=1,\"IP\",\"3GNET\"^m"
+ print "3GNET\n"
+ goto waitret
+:ctlte
+ send "AT+CGDCONT=1,\"IP\",\"CTNET\"^m"
+ print "CTNET\n"
+:waitret
+ waitfor 3 "OK","ERR","ERROR"
+ if % = -1 goto apnerror
+ if % = 0 goto continue
+ if % = 1 goto apnerror
+ if % = 2 goto apnerror
+:apnerror
+ print "Error setting APN!\n"
+ exit 1
+:continue
+ print "OK\n"
+ exit 0
+

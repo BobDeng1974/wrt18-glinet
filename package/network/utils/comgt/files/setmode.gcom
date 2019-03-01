@@ -1,20 +1,21 @@
-# set wwan mode from environment
 opengt
  set com 115200n81
+ set comecho off
  set senddelay 0.02
- waitquiet 1 0.2
+ waitquiet 0.2 0.2
  flash 0.1
 
 :start
  print "Trying to set mode\n"
- send $env("MODE")
+ let $x = $env("MODE")
+ print $x,"\n"
+ send $x
  send "^m"
-
  waitfor 15 "OK","ERR","ERROR"
  if % = 0 goto continue
  if % = 1 goto modeerror
  if % = 2 goto modeerror
-
+ 
  print "Timeout setting WWAN mode!\n"
  exit 1
 
@@ -23,4 +24,5 @@ opengt
  exit 1
 
 :continue
+ print "OK\n"
  exit 0

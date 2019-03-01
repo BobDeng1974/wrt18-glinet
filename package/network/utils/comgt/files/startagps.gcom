@@ -1,0 +1,13 @@
+opengt
+ set com 115200n81
+ set comecho off
+ set senddelay 0.02
+ waitquiet 0.2 0.2
+ flash 0.1
+
+:start
+ print "Trying to set AGPS\n"
+ send "at+gpsstart^m"
+ send "at+gpsconfig=20,180,9999999,1,2^m"
+ print "OK\n"
+ exit 0

@@ -71,14 +71,31 @@ define Package/comgt/install
 	$(INSTALL_DIR) $(1)/etc/chatscripts
 	$(INSTALL_DATA) ./files/3g.chat $(1)/etc/chatscripts/3g.chat
 	$(INSTALL_DATA) ./files/evdo.chat $(1)/etc/chatscripts/evdo.chat
+	$(INSTALL_DATA) ./files/ec20private.chat $(1)/etc/chatscripts/ec20private.chat
 	$(INSTALL_DIR) $(1)/etc/gcom
 	$(INSTALL_DATA) ./files/setpin.gcom $(1)/etc/gcom/setpin.gcom
+	$(INSTALL_DATA) ./files/checkpin.gcom $(1)/etc/gcom/checkpin.gcom
 	$(INSTALL_DATA) ./files/setmode.gcom $(1)/etc/gcom/setmode.gcom
 	$(INSTALL_DATA) ./files/getcardinfo.gcom $(1)/etc/gcom/getcardinfo.gcom
 	$(INSTALL_DATA) ./files/getstrength.gcom $(1)/etc/gcom/getstrength.gcom
 	$(INSTALL_DATA) ./files/getcarrier.gcom $(1)/etc/gcom/getcarrier.gcom
 	$(INSTALL_DATA) ./files/getcnum.gcom $(1)/etc/gcom/getcnum.gcom
 	$(INSTALL_DATA) ./files/getimsi.gcom $(1)/etc/gcom/getimsi.gcom
+	$(INSTALL_DATA) ./files/initfirst.gcom $(1)/etc/gcom/initfirst.gcom
+	$(INSTALL_DATA) ./files/check_status.gcom $(1)/etc/gcom/check_status.gcom
+	$(INSTALL_DATA) ./files/nettype.gcom $(1)/etc/gcom/nettype.gcom
+	$(INSTALL_DATA) ./files/autoinitapn.gcom $(1)/etc/gcom/autoinitapn.gcom
+	$(INSTALL_DATA) ./files/startagps.gcom $(1)/etc/gcom/startagps.gcom
+	$(INSTALL_DATA) ./files/longsangagps.gcom $(1)/etc/gcom/longsangagps.gcom
+	$(INSTALL_DATA) ./files/ec20agps.gcom $(1)/etc/gcom/ec20agps.gcom
+	$(INSTALL_DATA) ./files/ec20agpsend.gcom $(1)/etc/gcom/ec20agpsend.gcom
+	$(INSTALL_DATA) ./files/clearcfun.gcom $(1)/etc/gcom/clearcfun.gcom
+	$(INSTALL_DATA) ./files/setcfun.gcom $(1)/etc/gcom/setcfun.gcom
+	$(INSTALL_DATA) ./files/check_reg.gcom $(1)/etc/gcom/check_reg.gcom
+	$(INSTALL_DATA) ./files/sysinfo.gcom $(1)/etc/gcom/sysinfo.gcom
+	$(INSTALL_DATA) ./files/ehrpdclose.gcom $(1)/etc/gcom/ehrpdclose.gcom
+	$(INSTALL_DATA) ./files/psdialindclose.gcom $(1)/etc/gcom/psdialindclose.gcom
+	$(INSTALL_DATA) ./files/ec20net.gcom $(1)/etc/gcom/ec20net.gcom
 	$(INSTALL_DIR) $(1)/etc/hotplug.d/tty
 	$(INSTALL_DATA) ./files/3g.usb $(1)/etc/hotplug.d/tty/30-3g
 	$(INSTALL_DIR) $(1)/lib/netifd/proto

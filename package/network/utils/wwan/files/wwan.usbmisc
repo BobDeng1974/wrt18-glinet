@@ -13,13 +13,17 @@ find_wwan_iface() {
 	config_get proto "$cfg" proto
 	config_get device "$cfg" device
 
+	logger -t wwan-usb "cfg:$cfg,dev:$DEVNAME,proto:$proto,act:$ACTION"
+	
 	[ "$proto" = wwan ] || [ "$proto" = mbim ] || [ "$proto" = qmi ] || [ "$proto" = ncm ] || return 0
-	[ -z "$device" -a "$proto" = wwan ] || [ "$device" = "/dev/$DEVNAME" ] || return 0
+	#[ -z "$device" -a "$proto" = wwan ] || [ "$device" = "/dev/$DEVNAME" ] || return 0
 	if [ "$ACTION" = add ]; then
 		proto_set_available "$cfg" 1
 	else
 		proto_set_available "$cfg" 0
+		/etc/init.d/qmidial stop
 	fi
+	
 	exit 0
 }
 

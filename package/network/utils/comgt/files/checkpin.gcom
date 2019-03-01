@@ -1,0 +1,54 @@
+# set pin code from evnironment "$PINCODE"
+opengt
+ set com 115200n81
+ set senddelay 0.05
+ waitquiet 3 0.5
+ flash 0.1
+
+ let c=0
+:start
+ send "AT+CPIN?^m"
+ waitfor 5 "SIM PUK","SIM PIN","READY","ERROR","ERR"
+ if % = -1 goto qcpin
+ if % = 0 goto ready
+ if % = 1 goto setpin
+ if % = 2 goto ready
+ if % = 3 goto checkrepeat
+ if % = 4 goto checkrepeat
+
+:checkrepeat
+ inc c
+ if c>3 goto qcpin
+ waitquiet 2 0.5
+ goto start
+
+:ready
+ print "Ready"
+ exit 0
+
+:setpin
+ print "Ready,Need PIN code"
+ exit 0
+
+:qcpin
+ waitquiet 3 0.5
+ send "AT+QCPIN?^m"
+ waitfor 5 "UIM PUK","UIM PIN","READY","ERROR","ERR"
+ if % = -1 goto qcout
+ if % = 0 goto ready
+ if % = 1 goto setpin
+ if % = 2 goto ready
+ if % = 3 goto end
+ if % = 4 goto end
+
+:qcout
+ print "Timeout"
+ exit 0
+
+:end
+ print "QCPIN Error"
+ exit 0
+
+:continue
+ exit 0
+

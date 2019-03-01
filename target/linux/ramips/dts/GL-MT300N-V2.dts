@@ -10,30 +10,36 @@
 	model = "GL-MT300N-V2";
 
 	chosen {
-		bootargs = "console=ttyS0,115200";
+		bootargs = "console=ttyS0,57600";
 	};
 
 	memory@0 {
 		device_type = "memory";
-		reg = <0x0 0x8000000>;
+		reg = <0x0 0x4000000>;
 	};
 
 	gpio-leds {
 		compatible = "gpio-leds";
 
-		power {
-			label = "gl-mt300n-v2:green:power";
-			default-state = "on";
-			gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;
+		heart {
+			label = "heart";
+			linux,default-trigger = "timer";
+			gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;
 		};
-
-		wan {
-			label = "gl-mt300n-v2:blue:wan";
-			gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
+		modpwr {
+			label = "modpwr";
+			gpios = <&gpio1 8 1>;
 		};
-
+		modrst {
+			label = "modrst";
+			gpios = <&gpio1 4 0>;
+		};
+		dialstatus {
+			label = "dialstatus";
+			gpios = <&gpio1 11 0>;
+		};
 		wlan {
-			label = "gl-mt300n-v2:red:wlan";
+			label = "wlan";
 			gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
 		};
 	};
@@ -46,40 +52,16 @@
 
 		reset {
 			label = "reset";
-			gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;
+			gpios = <&gpio1 7 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_RESTART>;
 		};
-
-		BTN_0 {
-			label = "BTN_0";
-			gpios = <&gpio0 0 GPIO_ACTIVE_LOW>;
-			linux,code = <BTN_0>;
-		};
-
-		BTN_1 {
-			label = "BTN_1";
-			gpios = <&gpio0 3 GPIO_ACTIVE_LOW>;
-			linux,code = <BTN_1>;
-		};
 	};
-
-	gpio_export {
-		compatible = "gpio-export";
-		#size-cells = <0>;
-
-		usb {
-			gpio-export,name = "usb";
-			gpio-export,output = <1>;
-			gpios = <&gpio0 11 GPIO_ACTIVE_HIGH>;
-		};
-	};
-
 };
 
 &pinctrl {
 	state_default: pinctrl0 {
 		gpio {
-			ralink,group = "wdt", "gpio", "wled_an", "p0led_an", "p1led_an", "i2s", "i2c";
+			ralink,group = "spi cs1","perst","wdt", "gpio", "wled_an", "p0led_an", "p1led_an","p2led_an", "p3led_an","p4led_an","i2s", "i2c";
 			ralink,function = "gpio";
 		};
 	};
@@ -125,7 +107,7 @@
 
 		partition@50000 {
 			 label = "firmware";
-			 reg = <0x50000 0xfb0000>;
+			 reg = <0x50000 0x0fb0000>;
 		};
 	};
 };

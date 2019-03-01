@@ -1,0 +1,1383 @@
+diff --git a/package/base-files/files/bin/config_generate b/package/base-files/files/bin/config_generate
+index fa14868..b2db7a8 100755
+--- a/package/base-files/files/bin/config_generate
++++ b/package/base-files/files/bin/config_generate
+@@ -7,6 +7,17 @@ CFG=/etc/board.json
+ [ -s $CFG ] || /bin/board_detect || exit 1
+ [ -s /etc/config/network -a -s /etc/config/system ] && exit 0
+ 
++generate_static_wwan_qmi() {
++	uci -q batch <<-EOF
++		delete network.qmi
++		set network.qmi='interface'
++		set network.qmi.device='/dev/cdc-wdm0'
++		set network.qmi.proto='qmi'
++		set network.qmi.apn='3GNET'
++		set network.qmi.auth='none'
++	EOF
++}
++
+ generate_static_network() {
+ 	uci -q batch <<-EOF
+ 		delete network.loopback
+@@ -411,7 +422,8 @@ json_load "$(cat ${CFG})"
+ if [ ! -s /etc/config/network ]; then
+ 	touch /etc/config/network
+ 	generate_static_network
+-
++	generate_static_wwan_qmi
++	
+ 	json_get_keys keys network
+ 	for key in $keys; do generate_network $key; done
+ 
+diff --git a/package/base-files/files/etc/rc.local b/package/base-files/files/etc/rc.local
+index 5639477..1b72830 100644
+--- a/package/base-files/files/etc/rc.local
++++ b/package/base-files/files/etc/rc.local
+@@ -1,4 +1,7 @@
+ # Put your custom commands here that should be executed once
+ # the system init finished. By default this file does nothing.
+ 
++enb="$(uci -q get netset.@netset[0].enable)"
++[ ${enb} = 0 ] && echo timer > /sys/class/leds/heart/trigger
++
+ exit 0
+diff --git a/package/kernel/mac80211/files/lib/wifi/mac80211.sh b/package/kernel/mac80211/files/lib/wifi/mac80211.sh
+index 511a918..7e632c1 100644
+--- a/package/kernel/mac80211/files/lib/wifi/mac80211.sh
++++ b/package/kernel/mac80211/files/lib/wifi/mac80211.sh
+@@ -113,14 +113,15 @@ detect_mac80211() {
+ 			set wireless.radio${devidx}.hwmode=11${mode_band}
+ 			${dev_id}
+ 			${ht_capab}
+-			set wireless.radio${devidx}.disabled=1
++			set wireless.radio${devidx}.disabled=0
+ 
+ 			set wireless.default_radio${devidx}=wifi-iface
+ 			set wireless.default_radio${devidx}.device=radio${devidx}
+ 			set wireless.default_radio${devidx}.network=lan
+ 			set wireless.default_radio${devidx}.mode=ap
+-			set wireless.default_radio${devidx}.ssid=OpenWrt
+-			set wireless.default_radio${devidx}.encryption=none
++			set wireless.default_radio${devidx}.ssid=ZYRH4G_$(cat /sys/class/net/eth0/address|awk -F ":" '{print $5""$6 }'| tr a-z A-Z)
++			set wireless.default_radio${devidx}.encryption=psk2
++			set wireless.default_radio${devidx}.key=zyrh3gvs.net
+ EOF
+ 		uci -q commit wireless
+ 
+diff --git a/package/network/config/firewall/files/firewall.config b/package/network/config/firewall/files/firewall.config
+index 8874e98..11b425a 100644
+--- a/package/network/config/firewall/files/firewall.config
++++ b/package/network/config/firewall/files/firewall.config
+@@ -17,6 +17,7 @@ config zone
+ 	option name		wan
+ 	list   network		'wan'
+ 	list   network		'wan6'
++	list   network		'qmi'
+ 	option input		REJECT
+ 	option output		ACCEPT
+ 	option forward		REJECT
+diff --git a/package/network/services/ppp/files/etc/ppp/options.pptp b/package/network/services/ppp/files/etc/ppp/options.pptp
+index 46a3f48..3777d84 100644
+--- a/package/network/services/ppp/files/etc/ppp/options.pptp
++++ b/package/network/services/ppp/files/etc/ppp/options.pptp
+@@ -3,5 +3,5 @@ noauth
+ nobsdcomp
+ nodeflate
+ idle 0
+-mppe required,no40,no56,stateless
+ maxfail 0
++debug
+diff --git a/package/network/utils/comgt/Makefile b/package/network/utils/comgt/Makefile
+index 3b7f4b9..48b0074 100644
+--- a/package/network/utils/comgt/Makefile
++++ b/package/network/utils/comgt/Makefile
+@@ -71,14 +71,31 @@ define Package/comgt/install
+ 	$(INSTALL_DIR) $(1)/etc/chatscripts
+ 	$(INSTALL_DATA) ./files/3g.chat $(1)/etc/chatscripts/3g.chat
+ 	$(INSTALL_DATA) ./files/evdo.chat $(1)/etc/chatscripts/evdo.chat
++	$(INSTALL_DATA) ./files/ec20private.chat $(1)/etc/chatscripts/ec20private.chat
+ 	$(INSTALL_DIR) $(1)/etc/gcom
+ 	$(INSTALL_DATA) ./files/setpin.gcom $(1)/etc/gcom/setpin.gcom
++	$(INSTALL_DATA) ./files/checkpin.gcom $(1)/etc/gcom/checkpin.gcom
+ 	$(INSTALL_DATA) ./files/setmode.gcom $(1)/etc/gcom/setmode.gcom
+ 	$(INSTALL_DATA) ./files/getcardinfo.gcom $(1)/etc/gcom/getcardinfo.gcom
+ 	$(INSTALL_DATA) ./files/getstrength.gcom $(1)/etc/gcom/getstrength.gcom
+ 	$(INSTALL_DATA) ./files/getcarrier.gcom $(1)/etc/gcom/getcarrier.gcom
+ 	$(INSTALL_DATA) ./files/getcnum.gcom $(1)/etc/gcom/getcnum.gcom
+ 	$(INSTALL_DATA) ./files/getimsi.gcom $(1)/etc/gcom/getimsi.gcom
++	$(INSTALL_DATA) ./files/initfirst.gcom $(1)/etc/gcom/initfirst.gcom
++	$(INSTALL_DATA) ./files/check_status.gcom $(1)/etc/gcom/check_status.gcom
++	$(INSTALL_DATA) ./files/nettype.gcom $(1)/etc/gcom/nettype.gcom
++	$(INSTALL_DATA) ./files/autoinitapn.gcom $(1)/etc/gcom/autoinitapn.gcom
++	$(INSTALL_DATA) ./files/startagps.gcom $(1)/etc/gcom/startagps.gcom
++	$(INSTALL_DATA) ./files/longsangagps.gcom $(1)/etc/gcom/longsangagps.gcom
++	$(INSTALL_DATA) ./files/ec20agps.gcom $(1)/etc/gcom/ec20agps.gcom
++	$(INSTALL_DATA) ./files/ec20agpsend.gcom $(1)/etc/gcom/ec20agpsend.gcom
++	$(INSTALL_DATA) ./files/clearcfun.gcom $(1)/etc/gcom/clearcfun.gcom
++	$(INSTALL_DATA) ./files/setcfun.gcom $(1)/etc/gcom/setcfun.gcom
++	$(INSTALL_DATA) ./files/check_reg.gcom $(1)/etc/gcom/check_reg.gcom
++	$(INSTALL_DATA) ./files/sysinfo.gcom $(1)/etc/gcom/sysinfo.gcom
++	$(INSTALL_DATA) ./files/ehrpdclose.gcom $(1)/etc/gcom/ehrpdclose.gcom
++	$(INSTALL_DATA) ./files/psdialindclose.gcom $(1)/etc/gcom/psdialindclose.gcom
++	$(INSTALL_DATA) ./files/ec20net.gcom $(1)/etc/gcom/ec20net.gcom
+ 	$(INSTALL_DIR) $(1)/etc/hotplug.d/tty
+ 	$(INSTALL_DATA) ./files/3g.usb $(1)/etc/hotplug.d/tty/30-3g
+ 	$(INSTALL_DIR) $(1)/lib/netifd/proto
+diff --git a/package/network/utils/comgt/files/3g.chat b/package/network/utils/comgt/files/3g.chat
+index 6656240..212dede 100644
+--- a/package/network/utils/comgt/files/3g.chat
++++ b/package/network/utils/comgt/files/3g.chat
+@@ -5,7 +5,6 @@ REPORT  CONNECT
+ TIMEOUT 10
+ ""      "AT&F"
+ OK      "ATE1"
+-OK      'AT+CGDCONT=1,"IP","$USE_APN"'
+ SAY     "Calling UMTS/GPRS"
+ TIMEOUT 30
+ OK      "ATD$DIALNUMBER"
+diff --git a/package/network/utils/comgt/files/3g.sh b/package/network/utils/comgt/files/3g.sh
+index 0d02d4c..b30dab0 100644
+--- a/package/network/utils/comgt/files/3g.sh
++++ b/package/network/utils/comgt/files/3g.sh
+@@ -1,9 +1,6 @@
+ #!/bin/sh
+ 
+ [ -n "$INCLUDE_ONLY" ] || {
+-	NOT_INCLUDED=1
+-	INCLUDE_ONLY=1
+-
+ 	. ../netifd-proto.sh
+ 	. ./ppp.sh
+ 	init_proto "$@"
+@@ -13,38 +10,63 @@ proto_3g_init_config() {
+ 	no_device=1
+ 	available=1
+ 	ppp_generic_init_config
++	# vars in /etc/config/network.ppp
++	# json_load(jshn -r xx) to shell env
+ 	proto_config_add_string "device:device"
+ 	proto_config_add_string "apn"
+ 	proto_config_add_string "service"
+ 	proto_config_add_string "pincode"
+ 	proto_config_add_string "dialnumber"
++	proto_config_add_string "username"
++	proto_config_add_string "password"
++	proto_config_add_string "at_port"
++	proto_config_add_string "private_dial"
++	proto_config_add_string "u9300_gps"
++	proto_config_add_string "ec20_atport"
++	proto_config_add_string "ec20_device"
++	proto_config_add_string "ec20_gps"
+ }
+ 
+ proto_3g_setup() {
+ 	local interface="$1"
+-	local chat
+-
++	local chatcfg
++	local modem_type="NONE"
++	
+ 	json_get_var device device
+ 	json_get_var apn apn
+ 	json_get_var service service
+ 	json_get_var pincode pincode
+ 	json_get_var dialnumber dialnumber
++	# add by wind
++	#for u9300
++	json_get_var username username
++	json_get_var password password
++	json_get_var at_port at_port
++	json_get_var private_dial private_dial
++	
++	#for ec20
++	json_get_var ec20_atport ec20_atport
++	json_get_var ec20_device ec20_device
++	# end
+ 
++	[ -z "$at_port" ] && at_port="/dev/ttyUSB2"
++	[ -z "$private_dial" ] && private_dial="0"
++	
+ 	[ -n "$dat_device" ] && device=$dat_device
+-
+-	device="$(readlink -f $device)"
+ 	[ -e "$device" ] || {
+ 		proto_set_available "$interface" 0
+ 		return 1
+ 	}
+-
++	nettype="NONE"
++	# every time pppd to be called
+ 	case "$service" in
+ 		cdma|evdo)
+-			chat="/etc/chatscripts/evdo.chat"
++			chatcfg="/etc/chatscripts/evdo.chat"
+ 		;;
+ 		*)
+-			chat="/etc/chatscripts/3g.chat"
+-			cardinfo=$(gcom -d "$device" -s /etc/gcom/getcardinfo.gcom)
++			rm -f /tmp/dialok
++			date >> /tmp/dialcount
++			cardinfo=$(gcom -d "$at_port" -s /etc/gcom/getcardinfo.gcom)
+ 			if echo "$cardinfo" | grep -q Novatel; then
+ 				case "$service" in
+ 					umts_only) CODE=2;;
+@@ -68,39 +90,187 @@ proto_3g_setup() {
+ 					*) CODE="2,2";;
+ 				esac
+ 				export MODE="AT^SYSCFG=${CODE},3FFFFFFF,2,4"
++			elif echo "$cardinfo" | grep -q LONGSUNG; then
++				modem_type="LONGSUNG"
++				case "$service" in
++					ulong1) CODE=1;;
++					ulong2) CODE=2;;
++					ulong3) CODE=3;;
++					ulong4) CODE=4;;
++					ulong5) CODE=5;;
++					ulong6) CODE=6;;
++					ulong7) CODE=7;;
++					ulong8) CODE=8;;
++					ulong9) CODE=9;;
++					ulong10) CODE=10;;
++					ulong11) CODE=11;;
++					ulong12) CODE=12;;
++					ulong13) CODE=13;;
++					ulong14) CODE=14;;
++					ulong15) CODE=15;;
++					*) CODE=2;;
++				esac
++				export MODE="AT+MODODREX=${CODE}"
++			elif echo "$cardinfo" | grep -q EC20; then
++				modem_type="EC20"
++				device="/dev/ttyUSB3"
++			else
++				#unknow USB_Module
++				logger -t ppp "unknow usb module:$cardinfo"
++				sleep 1
++				return 1
+ 			fi
++			
++			[ ! -e "/tmp/modem_type" ] && echo $modem_type > /tmp/modem_type
++			
++			# check sim card
++			local simst=$(gcom -d "$at_port" -s /etc/gcom/checkpin.gcom)
++			echo "simcard=$simst" > /tmp/3g-info
++			echo $simst > /tmp/sim-info
+ 
+-			if [ -n "$pincode" ]; then
+-				PINCODE="$pincode" gcom -d "$device" -s /etc/gcom/setpin.gcom || {
+-					proto_notify_error "$interface" PIN_FAILED
+-					proto_block_restart "$interface"
+-					return 1
+-				}
++			if echo "$simst" | grep -qi Ready; then
++				# sim card ready.to dial ppp
++				[ ! -e "/tmp/sim_ready" ] && touch /tmp/sim_ready
++				# LED blink,gpio43
++				echo timer > /sys/class/leds/dialstatus/trigger
++			else
++				#SIM ready to no
++				rm -f /tmp/sim_ready
++				echo none > /sys/class/leds/dialstatus/trigger
++				return 1
+ 			fi
+-			[ -n "$MODE" ] && gcom -d "$device" -s /etc/gcom/setmode.gcom
+-
+-			# wait for carrier to avoid firmware stability bugs
+-			[ -n "$SIERRA" ] && {
+-				gcom -d "$device" -s /etc/gcom/getcarrier.gcom || return 1
+-			}
+-
+-			if [ -z "$dialnumber" ]; then
+-				dialnumber="*99***1#"
++			
++#			local netreg=$(gcom -d "$at_port" -s /etc/gcom/check_reg.gcom)
++#			if echo "$netreg" | grep -qi '0,1'; then
++#				logger -t ppp "Registered Home Network"
++#			elif echo "$netreg" | grep -qi '0,5'; then
++#				logger -t ppp "Registered Remote Network"
++#			else
++#				logger -t ppp "$netreg"
++#				# check CSQ  SIMCARD PSRAR  Creg CEREG
++#				gcom -d "$at_port" -s /etc/gcom/check_status.gcom > /tmp/at_failed_ret
++#				echo "$netreg" >> /tmp/at_failed_ret
++#				return 1
++#			fi
++			
++			local sysinfo=$(gcom -d "$at_port" -s /etc/gcom/sysinfo.gcom)
++			if echo "$sysinfo" | grep -qi 'NO,'; then
++				logger -t ppp "!!! SYSINFO FAILED !!!"
++				# check CSQ  SIMCARD PSRAR  Creg CEREG
++				date >> /tmp/at_failed_ret
++				gcom -d "$at_port" -s /etc/gcom/check_status.gcom >> /tmp/at_failed_ret
++				return 1
++			fi
++			
++			if [ "$modem_type" = "LONGSUNG" ]; then
++				nettype=$(gcom -d "$at_port" -s /etc/gcom/nettype.gcom)
++			else
++				nettype=$(gcom -d "$at_port" -s /etc/gcom/ec20net.gcom)
+ 			fi
++			
++			if echo "$nettype" |grep -qw EVDO; then
++				username="ctnet@mycdma.cn"
++				password="vnet.mobi"
++				dialnumber="#777"
++			elif echo "$nettype" |grep -qw CDMA; then
++				username="ctnet@mycdma.cn"
++				password="vnet.mobi"
++				dialnumber="#777"
++			elif echo "$nettype" |grep -qi NONE; then
++				logger -t ppp "Do not find Network!"
++				return 1
++			else
++				if [ "$private_dial" != "1" ]; then
++					#ignore web vars，pubilc dial do not need user&pwd
++					username=""
++					password=""
++				fi
++				dialnumber="*99#"
++			fi
++			
++			logger -t ppp "Reg Network:$nettype"
++			
++			chatcfg="/etc/chatscripts/3g.chat"
++			connect="DIALNUMBER=$dialnumber /usr/sbin/chat -t5 -v -E -f $chatcfg"
++			
++			if [ "$private_dial" = "1" ]; then
++				if [ "$modem_type" = "LONGSUNG" ]; then
++					#only for 9300 private dial
++					chatcfg="/etc/chatscripts/3gprivate.chat"
++					#cgdcont ,3GNET CTNET $QCPDPP=1,1,"user","pwd"
++					export CGDCONT="AT+CGDCONT=1,\"IP\",\"$apn\"";
++					export USER_PWD="AT\$QCPDPP=1,1,\"$password\",\"$username\"";
++					gcom -d "$at_port" -s /etc/gcom/initfirst.gcom
++					
++				elif [ "$modem_type" = "EC20" ]; then
++					#only for ec20 private dial
++					chatcfg="/etc/chatscripts/ec20private.chat"
++					#QCFG="cdmaruim",1';QICSGP=1,1,"$USE_APN","$USER","$PWD"';
++					export CGDCONT="AT+QCFG=\"cdmaruim\",1";
++					export USER_PWD="AT+QICSGP=1,1,\"$apn\",\"$username\",\"$password\"";
++					#gcom -d "$at_port" -s /etc/gcom/initfirst.gcom
++					logger -t ppp "EC20 Private Dial......"
++				fi
++				
++				connect="${apn:+USE_APN=$apn} DIALNUMBER=$dialnumber USER=$username PWD=$password /usr/sbin/chat -t5 -v -E -f $chatcfg"
++			else
++				# auto setting APN
++				export USE_APN="$apn";
++				gcom -d "$at_port" -s /etc/gcom/autoinitapn.gcom
++			fi
++			
++			# set searching network order
++ 			[ -n "$MODE" ] && gcom -d "$at_port" -s /etc/gcom/setmode.gcom
++			
++			if [ "$modem_type" = "LONGSUNG" ]; then
++				# close ehrpd and psdialind
++				logger -t ppp "LONGSUNG, to close ehprd and psdialind"
++				gcom -d "$at_port" -s /etc/gcom/ehrpdclose.gcom
++				gcom -d "$at_port" -s /etc/gcom/psdialindclose.gcom
++			fi
++			
++			# to check CSQ & Creg & Cops & IMEI & IMSI .etc
++			if echo "$cardinfo" | grep -qi IMEI; then
++				imei=$(echo "$cardinfo" | grep -i IMEI)
++				[ ! -s "/tmp/devimeiid" ] && echo "${imei:14:6}" > /tmp/devimeiid
++				echo "imei=${imei#IMEI:}" >> /tmp/3g-info
++				imsi=$(gcom -d "$at_port" -s /etc/gcom/getimsi.gcom)
++				echo $imsi >> /tmp/3g-info
++				sig=$(gcom -d "$at_port" -s /etc/gcom/getstrength.gcom)
++				echo "signal=$sig" >> /tmp/3g-info
++				echo $sig > /tmp/sig
++				echo "mac=$(cat /sys/class/net/eth0/address)" >> /tmp/3g-info
+ 
++			fi
++			
++			echo "Default" > /tmp/pub_info
++			cat /tmp/3g-info >> /tmp/pub_info
++			#cat /tmp/module_status_file >> /tmp/pub_info
++			
++			echo "Default" > /tmp/dialcfg
++			echo "4Gdial=$private_dial" >> /tmp/dialcfg
++			echo "apn=$apn" >> /tmp/dialcfg
++			echo "user=$username" >> /tmp/dialcfg
++			echo "password=$password" >> /tmp/dialcfg
++			echo "dialnumber=$dialnumber" >> /tmp/dialcfg
++			
++			if [ "$modem_type" = "LONGSUNG" ]; then
++				gcom -d "$at_port" -s /etc/gcom/longsangagps.gcom > /tmp/agps_status
++			elif [ "$modem_type" = "EC20" ]; then
++				gcom -d "$at_port" -s /etc/gcom/ec20agps.gcom > /tmp/agps_status
++			fi
+ 		;;
+ 	esac
+-
+-	connect="${apn:+USE_APN=$apn }DIALNUMBER=$dialnumber /usr/sbin/chat -t5 -v -E -f $chat"
+ 	ppp_generic_setup "$interface" \
+ 		noaccomp \
++		${username:+user "$username" password "$password"} \
+ 		nopcomp \
+ 		novj \
+ 		nobsdcomp \
+ 		noauth \
+-		set EXTENDPREFIX=1 \
+ 		lock \
+ 		crtscts \
++		modem \
+ 		115200 "$device"
+ 	return 0
+ }
+@@ -109,4 +279,7 @@ proto_3g_teardown() {
+ 	proto_kill_command "$interface"
+ }
+ 
+-[ -z "$NOT_INCLUDED" ] || add_protocol 3g
++[ -n "$INCLUDE_ONLY" ] || {
++	add_protocol 3g
++}
++
+diff --git a/package/network/utils/comgt/files/directip.sh b/package/network/utils/comgt/files/directip.sh
+index 3452fa5..66d92a7 100644
+--- a/package/network/utils/comgt/files/directip.sh
++++ b/package/network/utils/comgt/files/directip.sh
+@@ -15,19 +15,17 @@ proto_directip_init_config() {
+ 	proto_config_add_string "auth"
+ 	proto_config_add_string "username"
+ 	proto_config_add_string "password"
+-	proto_config_add_defaults
+ }
+ 
+ proto_directip_setup() {
+ 	local interface="$1"
+ 	local chat devpath devname
+ 
+-	local device apn pincode ifname auth username password $PROTO_DEFAULT_OPTIONS
+-	json_get_vars device apn pincode auth username password $PROTO_DEFAULT_OPTIONS
++	local device apn pincode ifname auth username password
++	json_get_vars device apn pincode auth username password
+ 
+ 	[ -n "$ctl_device" ] && device=$ctl_device
+ 
+-	device="$(readlink -f $device)"
+ 	[ -e "$device" ] || {
+ 		proto_notify_error "$interface" NO_DEVICE
+ 		proto_set_available "$interface" 0
+@@ -44,7 +42,8 @@ proto_directip_setup() {
+ 		return 1
+ 	}
+ 
+-	gcom -d "$device" -s /etc/gcom/getcardinfo.gcom | grep -q "Sierra Wireless" || {
++	cardinfo=$(gcom -d "$device" -s /etc/gcom/getcardinfo.gcom)
++	[ -n $(echo "$cardinfo" | grep -q "Sierra Wireless") ] || {
+ 		proto_notify_error "$interface" BAD_DEVICE
+ 		proto_block_restart "$interface"
+ 		return 1
+@@ -81,15 +80,12 @@ proto_directip_setup() {
+ 	json_add_string name "${interface}_4"
+ 	json_add_string ifname "@$interface"
+ 	json_add_string proto "dhcp"
+-	proto_add_dynamic_defaults
+ 	ubus call network add_dynamic "$(json_dump)"
+ 
+ 	json_init
+ 	json_add_string name "${interface}_6"
+ 	json_add_string ifname "@$interface"
+ 	json_add_string proto "dhcpv6"
+-	json_add_string extendprefix 1
+-	proto_add_dynamic_defaults
+ 	ubus call network add_dynamic "$(json_dump)"
+ 
+ 	return 0
+diff --git a/package/network/utils/comgt/files/getcardinfo.gcom b/package/network/utils/comgt/files/getcardinfo.gcom
+index f91665f..f6f504d 100644
+--- a/package/network/utils/comgt/files/getcardinfo.gcom
++++ b/package/network/utils/comgt/files/getcardinfo.gcom
+@@ -6,9 +6,15 @@ opengt
+  flash 0.1
+ 
+ :start
+- send "AT+CGMI^m"
++ send "ATI^m"
+  get 1 "" $s
+  print $s
+ 
++ send "AT+CGSN^m"
++ get 1 "^m" $s
++ get 1 "^m" $s
++ print "IMEI:",$right($s,15),"\n"
++
++
+ :continue
+  exit 0
+diff --git a/package/network/utils/comgt/files/getcarrier.gcom b/package/network/utils/comgt/files/getcarrier.gcom
+index 1e0216d..fbfa560 100644
+--- a/package/network/utils/comgt/files/getcarrier.gcom
++++ b/package/network/utils/comgt/files/getcarrier.gcom
+@@ -8,13 +8,13 @@ opengt
+     waitfor 5 "+CGATT: 1","+CGATT: 0"
+     print "\n."
+     if % = -1 goto error
+-    if c > 10 goto toolong
++    if c > 5 goto toolong
+     if % = 0 goto out
+-    sleep 2
++    sleep 1
+     if % = 1 goto loop
+   :toolong
+   exit 1
+   :error
+-  exit 0
++  exit 1
+   :out
+  exit 0
+diff --git a/package/network/utils/comgt/files/getimsi.gcom b/package/network/utils/comgt/files/getimsi.gcom
+index 0485456..69030ba 100644
+--- a/package/network/utils/comgt/files/getimsi.gcom
++++ b/package/network/utils/comgt/files/getimsi.gcom
+@@ -12,6 +12,6 @@ opengt
+  let x = len($s)
+  if x<2 goto continue
+  let $s = $right($s, x-1)
+- print $s
++ print "imsi=",$s
+ :continue
+  exit 0
+diff --git a/package/network/utils/comgt/files/getstrength.gcom b/package/network/utils/comgt/files/getstrength.gcom
+index 2886285..14c56c4 100644
+--- a/package/network/utils/comgt/files/getstrength.gcom
++++ b/package/network/utils/comgt/files/getstrength.gcom
+@@ -6,9 +6,60 @@ opengt
+  flash 0.1
+ 
+ :start
+- send "AT+CSQ^m"
+- get 1 "" $s
+- print $s
++	waitquiet 1 0.5
++	send "AT+PSRAT^m"
++	waitfor 5 "EVDO","CDMA","LTE","WCDMA","TDSCDMA"
++	if % = 0 goto evdo
++	if % = 1 goto cdma
++	if % = 2 goto csq
++	if % = 3 goto csq
++	if % = 4 goto csq
+ 
++:csq
++	waitquiet 1 0.1
++	send "AT+CSQ^m"
++	get 2 "^m" $s
++	get 2 ":" $s
++	get 2 "," $s
++	print $s
++	exit 0
++:cdma
++	waitquiet 1 0.1
++	send "AT+CCSQ^m"
++	get 2 "^m" $s
++	get 2 ":" $s
++	get 2 "," $s
++	print $s
++	exit 0
++:evdo
++	waitquiet 2 0.1
++	send "AT\^HDRCSQ^m"
++	waitfor 2 "ERROR","20","40","60","80","99"
++	if % = 0 goto level0
++	if % = 1 goto level1
++	if % = 2 goto level2
++	if % = 3 goto level3
++	if % = 4 goto level4
++	if % = 5 goto level5
++
++:level0
++	print "0"
++	exit 0
++:level1
++	print "15"
++	exit 0
++:level2
++	print "20"
++	exit 0
++:level3
++	print "24"
++	exit 0
++:level4
++	print "28"
++	exit 0
++:level5
++	print "30"
++	exit 0
+ :continue
++ print "0"
+  exit 0
+diff --git a/package/network/utils/comgt/files/ncm.json b/package/network/utils/comgt/files/ncm.json
+index bbdb30c..ea4f984 100644
+--- a/package/network/utils/comgt/files/ncm.json
++++ b/package/network/utils/comgt/files/ncm.json
+@@ -6,8 +6,7 @@
+ 			"ATQ0",
+ 			"ATV1",
+ 			"ATE1",
+-			"ATS0=0",
+-			"AT+CGDCONT=${profile},\\\"${pdptype}\\\"${apn:+,\\\"$apn\\\"}"
++			"ATS0=0"
+ 		],
+ 		"modes": {
+ 			"preferlte": "AT^SYSCFGEX=\\\"030201\\\",3fffffff,2,4,7fffffffffffffff,,",
+@@ -17,8 +16,8 @@
+ 			"gsm": "AT^SYSCFGEX=\\\"01\\\",3fffffff,2,4,7fffffffffffffff,,",
+ 			"auto": "AT^SYSCFGEX=\\\"00\\\",3fffffff,2,4,7fffffffffffffff,,"
+ 		},
+-		"connect": "AT^NDISDUP=${profile},1${apn:+,\\\"$apn\\\"}${username:+,\\\"$username\\\"}${password:+,\\\"$password\\\"}${auth:+,$auth}",
+-		"disconnect": "AT^NDISDUP=${profile},0"
++		"connect": "AT^NDISDUP=1,1,\\\"${apn}\\\"${username:+,\\\"$username\\\"}${password:+,\\\"$password\\\"}${auth:+,$auth}",
++		"disconnect": "AT^NDISDUP=1,0"
+ 	},
+ 	"samsung": {
+ 		"initialize": [
+@@ -26,7 +25,7 @@
+ 			"AT+CGREG=2",
+ 			"AT+CFUN=5",
+ 			"AT+MODESELECT=3",
+-			"AT+CGDCONT=${profile},\\\"${pdptype}\\\"${apn:+,\\\"$apn\\\"}"
++			"AT+CGDCONT=1,\\\"IP\\\",\\\"${apn}\\\""
+ 		],
+ 		"modes": {
+ 			"umts": "AT+CHANGEALLPATH=1"
+@@ -34,45 +33,17 @@
+ 		"connect": "AT+CGATT=1",
+ 		"disconnect": "AT+CGATT=0"
+ 	},
+-	"sierra": {
+-		"initialize": [
+-			"AT+CFUN=1",
+-			"AT+CGDCONT=${profile},\\\"${pdptype}\\\"${apn:+,\\\"$apn\\\"}",
+-			"AT$QCPDPP=${profile},${auth:-0}${password:+,\\\"$password\\\"}${username:+,\\\"$username\\\"}"
+-		],
+-		"modes": {
+-			"preferlte": "AT!SELRAT=07",
+-			"preferumts": "AT!SELRAT=05",
+-			"lte": "AT!SELRAT=06",
+-			"umts": "AT!SELRAT=01",
+-			"gsm": "AT!SELRAT=02",
+-			"auto": "AT!SELRAT=00"
+-		},
+-		"connect": "AT!SCACT=1,${profile}",
+-		"disconnect": "AT!SCACT=0,${profile}"
+-	},
+ 	"sony": {
+ 		"initialize": [
+ 			"AT+CFUN=1",
+-			"AT+CGDCONT=${profile},\\\"${pdptype}\\\"${apn:+,\\\"$apn\\\"}",
+-			"AT*EIAAUW=${profile},1,\\\"${username}\\\",\\\"${password}\\\",${auth:-00111}"
++			"AT+CGDCONT=1,\\\"IP\\\",\\\"${apn}\\\"",
++			"AT*EIAAUW=1,1,\\\"${username}\\\",\\\"${password}\\\",${auth:-00111}"
+ 		],
+ 		"modes": {
+ 			"umts": "AT+CFUN=6",
+ 			"gsm": "AT+CFUN=5"
+ 		},
+-		"connect": "AT*ENAP=1,${profile}",
++		"connect": "AT*ENAP=1,1",
+ 		"disconnect": "AT*ENAP=0"
+-	},
+-	"mtk1": {
+-		"initialize": [
+-			"AT+CFUN=1"
+-		],
+-		"configure": [
+-			"AT+CGDCONT=${profile},\\\"${pdptype}\\\",\\\"${apn}\\\",0,0"
+-		],
+-		"connect": "AT+CGACT=1,${profile}",
+-		"finalize": "AT+CGDATA=\\\"M-MBIM\\\",${profile},1",
+-		"disconnect": "AT+CGACT=0,${profile}"
+ 	}
+ }
+diff --git a/package/network/utils/comgt/files/ncm.sh b/package/network/utils/comgt/files/ncm.sh
+index 60b3965..1f0d0db 100644
+--- a/package/network/utils/comgt/files/ncm.sh
++++ b/package/network/utils/comgt/files/ncm.sh
+@@ -17,25 +17,15 @@ proto_ncm_init_config() {
+ 	proto_config_add_string pincode
+ 	proto_config_add_string delay
+ 	proto_config_add_string mode
+-	proto_config_add_string pdptype
+-	proto_config_add_int profile
+-	proto_config_add_defaults
+ }
+ 
+ proto_ncm_setup() {
+ 	local interface="$1"
+ 
+-	local manufacturer initialize setmode connect finalize ifname devname devpath
++	local manufacturer initialize setmode connect ifname devname devpath
+ 
+-	local device apn auth username password pincode delay mode pdptype profile $PROTO_DEFAULT_OPTIONS
+-	json_get_vars device apn auth username password pincode delay mode pdptype profile $PROTO_DEFAULT_OPTIONS
+-
+-	[ "$metric" = "" ] && metric="0"
+-
+-	[ -n "$profile" ] || profile=1
+-
+-	pdptype=`echo "$pdptype" | awk '{print toupper($0)}'`
+-	[ "$pdptype" = "IP" -o "$pdptype" = "IPV6" -o "$pdptype" = "IPV4V6" ] || pdptype="IP"
++	local device apn auth username password pincode delay mode
++	json_get_vars device apn auth username password pincode delay mode
+ 
+ 	[ -n "$ctl_device" ] && device=$ctl_device
+ 
+@@ -45,13 +35,16 @@ proto_ncm_setup() {
+ 		proto_set_available "$interface" 0
+ 		return 1
+ 	}
+-
+-	device="$(readlink -f $device)"
+ 	[ -e "$device" ] || {
+ 		echo "Control device not valid"
+ 		proto_set_available "$interface" 0
+ 		return 1
+ 	}
++	[ -n "$apn" ] || {
++		echo "No APN specified"
++		proto_notify_error "$interface" NO_APN
++		return 1
++	}
+ 
+ 	devname="$(basename "$device")"
+ 	case "$devname" in
+@@ -73,7 +66,7 @@ proto_ncm_setup() {
+ 
+ 	[ -n "$delay" ] && sleep "$delay"
+ 
+-	manufacturer=`gcom -d "$device" -s /etc/gcom/getcardinfo.gcom | awk 'NF && $0 !~ /AT\+CGMI/ { sub(/\+CGMI: /,""); print tolower($1); exit; }'`
++	manufacturer=`gcom -d "$device" -s /etc/gcom/getcardinfo.gcom | awk '/Manufacturer/ { print tolower($2) }'`
+ 	[ $? -ne 0 ] && {
+ 		echo "Failed to get modem information"
+ 		proto_notify_error "$interface" GETINFO_FAILED
+@@ -105,22 +98,10 @@ proto_ncm_setup() {
+ 			return 1
+ 		}
+ 	}
+-
+-	json_get_values configure configure
+-	echo "Configuring modem"
+-	for i in $configure; do
+-		eval COMMAND="$i" gcom -d "$device" -s /etc/gcom/runcommand.gcom || {
+-			echo "Failed to configure modem"
+-			proto_notify_error "$interface" CONFIGURE_FAILED
+-			return 1
+-		}
+-	done
+-
+ 	[ -n "$mode" ] && {
+ 		json_select modes
+ 		json_get_var setmode "$mode"
+-		echo "Setting mode"
+-		eval COMMAND="$setmode" gcom -d "$device" -s /etc/gcom/runcommand.gcom || {
++		COMMAND="$setmode" gcom -d "$device" -s /etc/gcom/runcommand.gcom || {
+ 			echo "Failed to set operating mode"
+ 			proto_notify_error "$interface" SETMODE_FAILED
+ 			return 1
+@@ -128,51 +109,29 @@ proto_ncm_setup() {
+ 		json_select ..
+ 	}
+ 
+-	echo "Starting network $interface"
+ 	json_get_vars connect
+-	echo "Connecting modem"
+ 	eval COMMAND="$connect" gcom -d "$device" -s /etc/gcom/runcommand.gcom || {
+ 		echo "Failed to connect"
+ 		proto_notify_error "$interface" CONNECT_FAILED
+ 		return 1
+ 	}
+ 
+-	json_get_vars finalize
+-
+-	echo "Setting up $ifname"
++	echo "Connected, starting DHCP"
++	
+ 	proto_init_update "$ifname" 1
+-	proto_add_data
+-	json_add_string "manufacturer" "$manufacturer"
+-	proto_close_data
+ 	proto_send_update "$interface"
+ 
+-	[ "$pdptype" = "IP" -o "$pdptype" = "IPV4V6" ] && {
+-		json_init
+-		json_add_string name "${interface}_4"
+-		json_add_string ifname "@$interface"
+-		json_add_string proto "dhcp"
+-		proto_add_dynamic_defaults
+-		ubus call network add_dynamic "$(json_dump)"
+-	}
+-
+-	[ "$pdptype" = "IPV6" -o "$pdptype" = "IPV4V6" ] && {
+-		json_init
+-		json_add_string name "${interface}_6"
+-		json_add_string ifname "@$interface"
+-		json_add_string proto "dhcpv6"
+-		json_add_string extendprefix 1
+-		proto_add_dynamic_defaults
+-		ubus call network add_dynamic "$(json_dump)"
+-	}
+-
+-	[ -n "$finalize" ] && {
+-		eval COMMAND="$finalize" gcom -d "$device" -s /etc/gcom/runcommand.gcom || {
+-			echo "Failed to configure modem"
+-			proto_notify_error "$interface" FINALIZE_FAILED
+-			return 1
+-		}
+-	}
+-
++	json_init
++	json_add_string name "${interface}_4"
++	json_add_string ifname "@$interface"
++	json_add_string proto "dhcp"
++	ubus call network add_dynamic "$(json_dump)"
++
++	json_init
++	json_add_string name "${interface}_6"
++	json_add_string ifname "@$interface"
++	json_add_string proto "dhcpv6"
++	ubus call network add_dynamic "$(json_dump)"
+ }
+ 
+ proto_ncm_teardown() {
+@@ -180,18 +139,17 @@ proto_ncm_teardown() {
+ 
+ 	local manufacturer disconnect
+ 
+-	local device profile
+-	json_get_vars device profile
+-
+-	[ -n "$ctl_device" ] && device=$ctl_device
+-
+-	[ -n "$profile" ] || profile=1
++	local device
++	json_get_vars device
+ 
+-	echo "Stopping network $interface"
++	echo "Stopping network"
+ 
+-	json_load "$(ubus call network.interface.$interface status)"
+-	json_select data
+-	json_get_vars manufacturer
++	manufacturer=`gcom -d "$device" -s /etc/gcom/getcardinfo.gcom | awk '/Manufacturer/ { print tolower($2) }'`
++	[ $? -ne 0 ] && {
++		echo "Failed to get modem information"
++		proto_notify_error "$interface" GETINFO_FAILED
++		return 1
++	}
+ 
+ 	json_load "$(cat /etc/gcom/ncm.json)"
+ 	json_select "$manufacturer" || {
+@@ -201,7 +159,7 @@ proto_ncm_teardown() {
+ 	}
+ 
+ 	json_get_vars disconnect
+-	eval COMMAND="$disconnect" gcom -d "$device" -s /etc/gcom/runcommand.gcom || {
++	COMMAND="$disconnect" gcom -d "$device" -s /etc/gcom/runcommand.gcom || {
+ 		echo "Failed to disconnect"
+ 		proto_notify_error "$interface" DISCONNECT_FAILED
+ 		return 1
+diff --git a/package/network/utils/comgt/files/setmode.gcom b/package/network/utils/comgt/files/setmode.gcom
+index 4ce0b5f..3b8d013 100644
+--- a/package/network/utils/comgt/files/setmode.gcom
++++ b/package/network/utils/comgt/files/setmode.gcom
+@@ -1,20 +1,21 @@
+-# set wwan mode from environment
+ opengt
+  set com 115200n81
++ set comecho off
+  set senddelay 0.02
+- waitquiet 1 0.2
++ waitquiet 0.2 0.2
+  flash 0.1
+ 
+ :start
+  print "Trying to set mode\n"
+- send $env("MODE")
++ let $x = $env("MODE")
++ print $x,"\n"
++ send $x
+  send "^m"
+-
+  waitfor 15 "OK","ERR","ERROR"
+  if % = 0 goto continue
+  if % = 1 goto modeerror
+  if % = 2 goto modeerror
+-
++ 
+  print "Timeout setting WWAN mode!\n"
+  exit 1
+ 
+@@ -23,4 +24,5 @@ opengt
+  exit 1
+ 
+ :continue
++ print "OK\n"
+  exit 0
+diff --git a/package/network/utils/comgt/files/setpin.gcom b/package/network/utils/comgt/files/setpin.gcom
+index a3f3402..66350fe 100644
+--- a/package/network/utils/comgt/files/setpin.gcom
++++ b/package/network/utils/comgt/files/setpin.gcom
+@@ -7,7 +7,6 @@ opengt
+ 
+  let c=0
+ :start
+- send "AT+CFUN=1^m"
+  send "AT+CPIN?^m"
+  waitfor 15 "SIM PUK","SIM PIN","READY","ERROR","ERR"
+  if % = -1 goto timeout
+diff --git a/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh b/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
+index 38d83ac..7893b5c 100755
+--- a/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
++++ b/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
+@@ -27,16 +27,17 @@ proto_qmi_init_config() {
+ 
+ proto_qmi_setup() {
+ 	local interface="$1"
+-	local dataformat connstat
++	local auth_int=0
++	local pincfg
++	local exe_cmd="/bin/qmidial"
+ 	local device apn auth username password pincode delay modes pdptype profile dhcpv6 autoconnect plmn $PROTO_DEFAULT_OPTIONS
+-	local cid_4 pdh_4 cid_6 pdh_6
+ 	local ip_6 ip_prefix_length gateway_6 dns1_6 dns2_6
+ 	json_get_vars device apn auth username password pincode delay modes pdptype profile dhcpv6 autoconnect plmn $PROTO_DEFAULT_OPTIONS
+-
++	
+ 	[ "$metric" = "" ] && metric="0"
+ 
+ 	[ -n "$ctl_device" ] && device=$ctl_device
+-
++	
+ 	[ -n "$device" ] || {
+ 		echo "No control device specified"
+ 		proto_notify_error "$interface" NO_DEVICE
+@@ -63,204 +64,26 @@ proto_qmi_setup() {
+ 	}
+ 
+ 	[ -n "$delay" ] && sleep "$delay"
+-
+-	while uqmi -s -d "$device" --get-pin-status | grep '"UIM uninitialized"' > /dev/null; do
+-		[ -e "$device" ] || return 1
+-		sleep 1;
+-	done
+-
+-	[ -n "$pincode" ] && {
+-		uqmi -s -d "$device" --verify-pin1 "$pincode" > /dev/null || uqmi -s -d "$device" --uim-verify-pin1 "$pincode" > /dev/null || {
+-			echo "Unable to verify PIN"
+-			proto_notify_error "$interface" PIN_FAILED
+-			proto_block_restart "$interface"
+-			return 1
+-		}
++	
++	#proto_notify_error "$interface" CALL_FAILED
++
++	[ "$auth" = "none" ] && auth_int=0
++	[ -n "$auth" -a "$auth" != "none" ] && auth_int=1
++	
++	logger -t qmi "Setting up $ifname with APN-$apn [$username-$password] pin-$pincode auth-$auth-$auth_int"
++	
++	[ -n "$apn" ] && {
++		exe_cmd="$exe_cmd -s $apn"
++		[ -n "$username" -a -n "$password" -a -n ${auth_int} ] && exe_cmd="$exe_cmd $username $password $auth_int"
++		[ -n "$pincode" ] && exe_cmd="$exe_cmd -p $pincode"
+ 	}
+-
+-	[ -n "$plmn" ] && {
+-		local mcc mnc
+-		if [ "$plmn" = 0 ]; then
+-			mcc=0
+-			mnc=0
+-			echo "Setting PLMN to auto"
+-		else
+-			mcc=${plmn:0:3}
+-			mnc=${plmn:3}
+-			echo "Setting PLMN to $plmn"
+-		fi
+-		uqmi -s -d "$device" --set-plmn --mcc "$mcc" --mnc "$mnc" || {
+-			echo "Unable to set PLMN"
+-			proto_notify_error "$interface" PLMN_FAILED
+-			proto_block_restart "$interface"
+-			return 1
+-		}
+-	}
+-
+-	# Cleanup current state if any
+-	uqmi -s -d "$device" --stop-network 0xffffffff --autoconnect
+-
+-	# Set IP format
+-	uqmi -s -d "$device" --set-data-format 802.3
+-	uqmi -s -d "$device" --wda-set-data-format 802.3
+-	dataformat="$(uqmi -s -d "$device" --wda-get-data-format)"
+-
+-	if [ "$dataformat" = '"raw-ip"' ]; then
+-
+-		[ -f /sys/class/net/$ifname/qmi/raw_ip ] || {
+-			echo "Device only supports raw-ip mode but is missing this required driver attribute: /sys/class/net/$ifname/qmi/raw_ip"
+-			return 1
+-		}
+-
+-		echo "Device does not support 802.3 mode. Informing driver of raw-ip only for $ifname .."
+-		echo "Y" > /sys/class/net/$ifname/qmi/raw_ip
+-	fi
+-
+-	uqmi -s -d "$device" --sync
+-
+-	echo "Waiting for network registration"
+-	while uqmi -s -d "$device" --get-serving-system | grep '"searching"' > /dev/null; do
+-		[ -e "$device" ] || return 1
+-		sleep 5;
+-	done
+-
+-	[ -n "$modes" ] && uqmi -s -d "$device" --set-network-modes "$modes"
+-
+-	echo "Starting network $interface"
+-
+-	pdptype=$(echo "$pdptype" | awk '{print tolower($0)}')
+-	[ "$pdptype" = "ip" -o "$pdptype" = "ipv6" -o "$pdptype" = "ipv4v6" ] || pdptype="ip"
+-
+-	if [ "$pdptype" = "ip" ]; then
+-		[ -z "$autoconnect" ] && autoconnect=1
+-		[ "$autoconnect" = 0 ] && autoconnect=""
+-	else
+-		[ "$autoconnect" = 1 ] || autoconnect=""
+-	fi
+-
+-	[ "$pdptype" = "ip" -o "$pdptype" = "ipv4v6" ] && {
+-		cid_4=$(uqmi -s -d "$device" --get-client-id wds)
+-		if ! [ "$cid_4" -eq "$cid_4" ] 2> /dev/null; then
+-			echo "Unable to obtain client ID"
+-			proto_notify_error "$interface" NO_CID
+-			return 1
+-		fi
+-
+-		uqmi -s -d "$device" --set-client-id wds,"$cid_4" --set-ip-family ipv4 > /dev/null
+-
+-		pdh_4=$(uqmi -s -d "$device" --set-client-id wds,"$cid_4" \
+-			--start-network \
+-			${apn:+--apn $apn} \
+-			${profile:+--profile $profile} \
+-			${auth:+--auth-type $auth} \
+-			${username:+--username $username} \
+-			${password:+--password $password} \
+-			${autoconnect:+--autoconnect})
+-
+-        # pdh_4 is a numeric value on success
+-		if ! [ "$pdh_4" -eq "$pdh_4" ] 2> /dev/null; then
+-			echo "Unable to connect IPv4"
+-			uqmi -s -d "$device" --set-client-id wds,"$cid_4" --release-client-id wds
+-			proto_notify_error "$interface" CALL_FAILED
+-			return 1
+-		fi
+-
+-        # Check data connection state
+-		connstat=$(uqmi -s -d "$device" --get-data-status)
+-                [ "$connstat" == '"connected"' ] || {
+-                        echo "No data link!"
+-                        uqmi -s -d "$device" --set-client-id wds,"$cid_4" --release-client-id wds
+-                        proto_notify_error "$interface" CALL_FAILED
+-                        return 1
+-                }
+-	}
+-
+-	[ "$pdptype" = "ipv6" -o "$pdptype" = "ipv4v6" ] && {
+-		cid_6=$(uqmi -s -d "$device" --get-client-id wds)
+-		if ! [ "$cid_6" -eq "$cid_6" ] 2> /dev/null; then
+-			echo "Unable to obtain client ID"
+-			proto_notify_error "$interface" NO_CID
+-			return 1
+-		fi
+-
+-		uqmi -s -d "$device" --set-client-id wds,"$cid_6" --set-ip-family ipv6 > /dev/null
+-
+-		pdh_6=$(uqmi -s -d "$device" --set-client-id wds,"$cid_6" \
+-			--start-network \
+-			${apn:+--apn $apn} \
+-			${profile:+--profile $profile} \
+-			${auth:+--auth-type $auth} \
+-			${username:+--username $username} \
+-			${password:+--password $password} \
+-			${autoconnect:+--autoconnect})
+-
+-        # pdh_6 is a numeric value on success
+-		if ! [ "$pdh_6" -eq "$pdh_6" ] 2> /dev/null; then
+-			echo "Unable to connect IPv6"
+-			uqmi -s -d "$device" --set-client-id wds,"$cid_6" --release-client-id wds
+-			proto_notify_error "$interface" CALL_FAILED
+-			return 1
+-		fi
+-
+-        # Check data connection state
+-		connstat=$(uqmi -s -d "$device" --get-data-status)
+-                [ "$connstat" == '"connected"' ] || {
+-                        echo "No data link!"
+-                        uqmi -s -d "$device" --set-client-id wds,"$cid_6" --release-client-id wds
+-                        proto_notify_error "$interface" CALL_FAILED
+-                        return 1
+-                }
+-	}
+-
+-	echo "Setting up $ifname"
+-	proto_init_update "$ifname" 1
+-	proto_set_keep 1
+-	proto_add_data
+-	[ -n "$pdh_4" ] && {
+-		json_add_string "cid_4" "$cid_4"
+-		json_add_string "pdh_4" "$pdh_4"
+-	}
+-	[ -n "$pdh_6" ] && {
+-		json_add_string "cid_6" "$cid_6"
+-		json_add_string "pdh_6" "$pdh_6"
+-	}
+-	proto_close_data
+-	proto_send_update "$interface"
+-	[ -n "$pdh_6" ] && {
+-		if [ -z "$dhcpv6" -o "$dhcpv6" = 0 ]; then
+-			json_load "$(uqmi -s -d $device --set-client-id wds,$cid_6 --get-current-settings)"
+-			json_select ipv6
+-			json_get_var ip_6 ip
+-			json_get_var gateway_6 gateway
+-			json_get_var dns1_6 dns1
+-			json_get_var dns2_6 dns2
+-			json_get_var ip_prefix_length ip-prefix-length
+-
+-			proto_init_update "$ifname" 1
+-			proto_set_keep 1
+-			proto_add_ipv6_address "$ip_6" "128"
+-			proto_add_ipv6_prefix "${ip_6}/${ip_prefix_length}"
+-			proto_add_ipv6_route "$gateway_6" "128"
+-			[ "$defaultroute" = 0 ] || proto_add_ipv6_route "::0" 0 "$gateway_6" "" "" "${ip_6}/${ip_prefix_length}"
+-			[ "$peerdns" = 0 ] || {
+-				proto_add_dns_server "$dns1_6"
+-				proto_add_dns_server "$dns2_6"
+-			}
+-			proto_send_update "$interface"
+-		else
+-			json_init
+-			json_add_string name "${interface}_6"
+-			json_add_string ifname "@$interface"
+-			json_add_string proto "dhcpv6"
+-			proto_add_dynamic_defaults
+-			# RFC 7278: Extend an IPv6 /64 Prefix to LAN
+-			json_add_string extendprefix 1
+-			json_close_object
+-			ubus call network add_dynamic "$(json_dump)"
+-		fi
+-	}
+-
+-	[ -n "$pdh_4" ] && {
++	exe_cmd="$exe_cmd &"
++	/bin/pidof qmidial && killall -INT qmidial && sleep 1
++	eval ${exe_cmd}
++	echo "exec dial: $exe_cmd"
++	sleep 1
++	
++	/bin/pidof qmidial && {
+ 		json_init
+ 		json_add_string name "${interface}_4"
+ 		json_add_string ifname "@$interface"
+@@ -269,44 +92,21 @@ proto_qmi_setup() {
+ 		json_close_object
+ 		ubus call network add_dynamic "$(json_dump)"
+ 	}
+-}
+-
+-qmi_wds_stop() {
+-	local cid="$1"
+-	local pdh="$2"
+-
+-	[ -n "$cid" ] || return
+-
+-	uqmi -s -d "$device" --set-client-id wds,"$cid" \
+-		--stop-network 0xffffffff \
+-		--autoconnect > /dev/null 2>&1
+-
+-	[ -n "$pdh" ] && {
+-		uqmi -s -d "$device" --set-client-id wds,"$cid" \
+-			--stop-network "$pdh" > /dev/null 2>&1
+-	}
+-
+-	uqmi -s -d "$device" --set-client-id wds,"$cid" \
+-		--release-client-id wds > /dev/null 2>&1
++	
++	proto_init_update "$ifname" 1
++	proto_send_update "$interface"
++	
++	return 0
+ }
+ 
+ proto_qmi_teardown() {
+ 	local interface="$1"
+-
+-	local device cid_4 pdh_4 cid_6 pdh_6
+-	json_get_vars device
+-
+-	[ -n "$ctl_device" ] && device=$ctl_device
+-
+-	echo "Stopping network $interface"
+-
++	logger -t qmi "Stopping network $interface"
+ 	json_load "$(ubus call network.interface.$interface status)"
+ 	json_select data
+-	json_get_vars cid_4 pdh_4 cid_6 pdh_6
+-
+-	qmi_wds_stop "$cid_4" "$pdh_4"
+-	qmi_wds_stop "$cid_6" "$pdh_6"
+-
++	
++	killall -INT qmidial
++	
+ 	proto_init_update "*" 0
+ 	proto_send_update "$interface"
+ }
+diff --git a/package/network/utils/wwan/files/wwan.usbmisc b/package/network/utils/wwan/files/wwan.usbmisc
+index 4079a7f..0eeea2d 100644
+--- a/package/network/utils/wwan/files/wwan.usbmisc
++++ b/package/network/utils/wwan/files/wwan.usbmisc
+@@ -13,13 +13,17 @@ find_wwan_iface() {
+ 	config_get proto "$cfg" proto
+ 	config_get device "$cfg" device
+ 
++	logger -t wwan-usb "cfg:$cfg,dev:$DEVNAME,proto:$proto,act:$ACTION"
++	
+ 	[ "$proto" = wwan ] || [ "$proto" = mbim ] || [ "$proto" = qmi ] || [ "$proto" = ncm ] || return 0
+-	[ -z "$device" -a "$proto" = wwan ] || [ "$device" = "/dev/$DEVNAME" ] || return 0
++	#[ -z "$device" -a "$proto" = wwan ] || [ "$device" = "/dev/$DEVNAME" ] || return 0
+ 	if [ "$ACTION" = add ]; then
+ 		proto_set_available "$cfg" 1
+ 	else
+ 		proto_set_available "$cfg" 0
++		/etc/init.d/qmidial stop
+ 	fi
++	
+ 	exit 0
+ }
+ 
+diff --git a/package/utils/busybox/files/cron b/package/utils/busybox/files/cron
+index ca04a0c..0de15e6 100755
+--- a/package/utils/busybox/files/cron
++++ b/package/utils/busybox/files/cron
+@@ -12,8 +12,12 @@ validate_cron_section() {
+ }
+ 
+ start_service() {
+-	[ -z "$(ls /etc/crontabs/)" ] && return 1
+-
++	[ ! -e "/etc/crontabs/root" ] && {
++		cat > /etc/crontabs/root <<"EOF"
++*/3 * * * * [ -e "/dev/ttyUSB2" ] && /sbin/ltepower.sh "/dev/ttyUSB2"
++EOF
++	}
++	
+ 	loglevel="$(uci_get "system.@system[0].cronloglevel")"
+ 
+ 	[ -z "${loglevel}" ] || {
+diff --git a/target/linux/ramips/dts/GL-MT300N-V2.dts b/target/linux/ramips/dts/GL-MT300N-V2.dts
+index a8e8b1d..132393f 100644
+--- a/target/linux/ramips/dts/GL-MT300N-V2.dts
++++ b/target/linux/ramips/dts/GL-MT300N-V2.dts
+@@ -10,30 +10,36 @@
+ 	model = "GL-MT300N-V2";
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,115200";
++		bootargs = "console=ttyS0,57600";
+ 	};
+ 
+ 	memory@0 {
+ 		device_type = "memory";
+-		reg = <0x0 0x8000000>;
++		reg = <0x0 0x4000000>;
+ 	};
+ 
+ 	gpio-leds {
+ 		compatible = "gpio-leds";
+ 
+-		power {
+-			label = "gl-mt300n-v2:green:power";
+-			default-state = "on";
+-			gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;
++		heart {
++			label = "heart";
++			linux,default-trigger = "timer";
++			gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;
+ 		};
+-
+-		wan {
+-			label = "gl-mt300n-v2:blue:wan";
+-			gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
++		modpwr {
++			label = "modpwr";
++			gpios = <&gpio1 8 1>;
++		};
++		modrst {
++			label = "modrst";
++			gpios = <&gpio1 4 0>;
++		};
++		dialstatus {
++			label = "dialstatus";
++			gpios = <&gpio1 11 0>;
+ 		};
+-
+ 		wlan {
+-			label = "gl-mt300n-v2:red:wlan";
++			label = "wlan";
+ 			gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
+ 		};
+ 	};
+@@ -46,40 +52,16 @@
+ 
+ 		reset {
+ 			label = "reset";
+-			gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;
++			gpios = <&gpio1 7 GPIO_ACTIVE_LOW>;
+ 			linux,code = <KEY_RESTART>;
+ 		};
+-
+-		BTN_0 {
+-			label = "BTN_0";
+-			gpios = <&gpio0 0 GPIO_ACTIVE_LOW>;
+-			linux,code = <BTN_0>;
+-		};
+-
+-		BTN_1 {
+-			label = "BTN_1";
+-			gpios = <&gpio0 3 GPIO_ACTIVE_LOW>;
+-			linux,code = <BTN_1>;
+-		};
+-	};
+-
+-	gpio_export {
+-		compatible = "gpio-export";
+-		#size-cells = <0>;
+-
+-		usb {
+-			gpio-export,name = "usb";
+-			gpio-export,output = <1>;
+-			gpios = <&gpio0 11 GPIO_ACTIVE_HIGH>;
+-		};
+ 	};
+-
+ };
+ 
+ &pinctrl {
+ 	state_default: pinctrl0 {
+ 		gpio {
+-			ralink,group = "wdt", "gpio", "wled_an", "p0led_an", "p1led_an", "i2s", "i2c";
++			ralink,group = "spi cs1","perst","wdt", "gpio", "wled_an", "p0led_an", "p1led_an","p2led_an", "p3led_an","p4led_an","i2s", "i2c";
+ 			ralink,function = "gpio";
+ 		};
+ 	};
+@@ -125,7 +107,7 @@
+ 
+ 		partition@50000 {
+ 			 label = "firmware";
+-			 reg = <0x50000 0xfb0000>;
++			 reg = <0x50000 0x0fb0000>;
+ 		};
+ 	};
+ };

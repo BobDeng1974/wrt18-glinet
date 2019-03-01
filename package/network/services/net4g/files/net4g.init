@@ -1,0 +1,31 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2006-2011 OpenWrt.org
+
+START=80
+
+start() {
+	enb="$(uci -q get netset.@netset[0].enable)"
+	[ $enb = 1 ] && {
+		devid="$(uci -q get netset.@netset[0].deviceid)"
+		[ -z "$devid" ] && {
+			macaddr=$(cat /sys/class/net/eth0/address|awk -F ":" '{print $4""$5""$6 }'| tr a-z A-Z)
+			[ -z "$macaddr" ] && macaddr="123456"
+			devid="$macaddr"
+			uci set netset.@netset[0].deviceid="$devid"
+			uci commit
+		}
+		
+		echo "Default" > /tmp/board_info
+		echo "remote_ip=$(uci -q get netset.@netset[0].remote_ip)" >> /tmp/board_info
+		echo "remote_port=$(uci -q get netset.@netset[0].remote_port)" >> /tmp/board_info
+		echo "deviceid=$devid" >> /tmp/board_info
+		
+		/bin/net4g -d
+	}
+}
+
+stop() {
+	killall -INT net4g
+	sleep 1
+	killall -9 net4g
+}

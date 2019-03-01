@@ -1,0 +1,12 @@
+#The word of "Default" must not be removed
+#every line MAX Length is 128 Bytes
+#the last line MUST include '\n'
+Default
+DeviceType=4G
+DeviceMacAddr=12:12:33:44:55:66
+DevImei=864944030305669
+DevImsi=460013635988698
+WorkStatus=3G
+UpTime=0
+TotalBytes=102
+IntervalTime=300

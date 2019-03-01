@@ -1,0 +1,16 @@
+opengt
+set com 115200n81
+set senddelay 0.05
+waitquiet 0.5 0.2
+flash 0.1
+:start
+	send "AT+CEREG?^m"
+	get 2 "" $s
+	print $s
+	waitquiet 0.5 0.2
+	send "AT+CREG?^m"
+	get 2 "" $s
+	print $s
+
+:continue
+	exit 0

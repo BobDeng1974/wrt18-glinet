@@ -1,0 +1,39 @@
+opengt
+set com 115200n81
+set senddelay 0.05
+waitquiet 1 0.2
+flash 0.1
+:start
+	send "AT\^SYSINFO^m"
+	get 2 "^m" $s
+	get 2 ":"  $s
+	get 2 "," $s
+	let a=val($s)
+	if a = 0 goto noreg1
+	get 2 "," $s
+	let a=val($s)
+	if a = 0 goto noreg2
+	get 2 "," $s
+	get 2 "," $s
+	let a=val($s)
+	if a = 0 goto noreg3
+	get 2 "," $s
+	let a=val($s)
+	if a = 255 goto noreg4
+
+:continue
+	print "OK,SYSINFO\n"
+	exit 0
+
+:noreg1
+	print "NO,SRVSTATUS\n"
+	exit 0
+:noreg2
+	print "NO,SRVDOMAIN\n"
+	exit 0
+:noreg3
+	print "NO,SYSMODE\n"
+	exit 0
+:noreg4
+	print "NO,SIMSTATE\n"
+	exit 0
