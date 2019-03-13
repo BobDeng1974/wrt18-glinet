@@ -20,11 +20,15 @@ start() {
 		echo "remote_port=$(uci -q get netset.@netset[0].remote_port)" >> /tmp/board_info
 		echo "deviceid=$devid" >> /tmp/board_info
 		
+		echo none > /sys/class/leds/heart/trigger
 		/bin/net4g -d
+		
 	}
+	[ $enb = 0 ] && echo timer > /sys/class/leds/heart/trigger
 }
 
 stop() {
+	echo "Offline" > /tmp/onoffline
 	killall -INT net4g
 	sleep 1
 	killall -9 net4g

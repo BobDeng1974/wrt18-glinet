@@ -65,8 +65,8 @@ rm -rf /tmp/gcom*
 # ttyUSBx is not exist
 [ ! -e "$1" ] && return 1
 
-enb="$(uci -q get qmicfg.qmicfg.enable)"
-[ ${enb} -lt 1 ] && return 1
+#enb="$(uci -q get qmicfg.qmicfg.enable)"
+ifstatus qmi > /dev/null || return 1
 
 renew_signal_led_status "$1"
 local num="$(cat /tmp/cfuncount | wc -l)"
