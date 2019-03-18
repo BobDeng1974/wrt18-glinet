@@ -5,12 +5,18 @@ START=80
 
 start() {
 	enb="$(uci -q get netset.@netset[0].enable)"
-	[ $enb = 1 ] && {
+	if [ -e "/tmp/sim_ready" -a $enb = 1 ]; then
 		devid="$(uci -q get netset.@netset[0].deviceid)"
 		[ -z "$devid" ] && {
-			macaddr=$(cat /sys/class/net/eth0/address|awk -F ":" '{print $4""$5""$6 }'| tr a-z A-Z)
-			[ -z "$macaddr" ] && macaddr="123456"
-			devid="$macaddr"
+			imei="$(cat /tmp/devimeiid)"
+			if [ -s "/tmp/devimeiid" ]; then
+				devid="$imei"
+			else
+				macaddr=$(cat /sys/class/net/eth0/address|awk -F ":" '{print $4""$5""$6 }'| tr a-z A-Z)
+				[ -z "$macaddr" ] && macaddr="123456"
+				devid="$macaddr"
+			fi
+			
 			uci set netset.@netset[0].deviceid="$devid"
 			uci commit
 		}
@@ -22,9 +28,9 @@ start() {
 		
 		echo none > /sys/class/leds/heart/trigger
 		/bin/net4g -d
-		
-	}
-	[ $enb = 0 ] && echo timer > /sys/class/leds/heart/trigger
+	else
+		[ $enb = 0 ] && echo timer > /sys/class/leds/heart/trigger
+	fi
 }
 
 stop() {

@@ -1,5 +1,6 @@
 #!/bin/sh
 
-[ "${TYPE}" = "switch" ] || echo ${BUTTON} > /tmp/failsafe_button
+echo "SKIP failsafe; ${TYPE} at ${BUTTON}"
+#[ "${TYPE}" = "switch" ] || echo ${BUTTON} > /tmp/failsafe_button
 
 return 0

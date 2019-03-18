@@ -1,0 +1,10 @@
+#!/bin/sh
+
+[ "${ACTION}" = "released" ] || exit 0
+
+. /lib/functions.sh
+
+#logger "$BUTTON pressed for $SEEN HZ(100)"
+echo "Default" > /tmp/vcc
+echo "voltage:$SEEN" >> /tmp/vcc
+return 0

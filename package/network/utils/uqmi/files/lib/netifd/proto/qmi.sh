@@ -25,6 +25,83 @@ proto_qmi_init_config() {
 	proto_config_add_defaults
 }
 
+_get_info_status_by_at() {
+	rm -f /tmp/dialok
+	date >> /tmp/dialcount
+	local at_port="$1"
+	local modem_type nettype
+	local cardinfo=$(gcom -d "$at_port" -s /etc/gcom/getcardinfo.gcom)
+	if echo "$cardinfo" | grep -q EC20; then
+		modem_type="EC20"
+	else
+		#unknow USB_Module
+		logger -t qmi-at "unknow usb module:$cardinfo"
+		return 1
+	fi
+	
+	[ ! -e "/tmp/modem_type" ] && echo $modem_type > /tmp/modem_type
+			
+	# check sim card
+	local simst=$(gcom -d "$at_port" -s /etc/gcom/checkpin.gcom)
+	echo "simcard=$simst" > /tmp/3g-info
+	echo $simst > /tmp/sim-info
+
+	if echo "$simst" | grep -qi Ready; then
+		# sim card ready.to dial ppp
+		[ ! -e "/tmp/sim_ready" ] && touch /tmp/sim_ready
+		# LED blink,gpio43
+		echo timer > /sys/class/leds/dialstatus/trigger
+	else
+		#SIM ready to no
+		rm -f /tmp/sim_ready
+		logger -t qmi-at "!!! Has NO SIM Card !!!"
+		echo none > /sys/class/leds/dialstatus/trigger
+		return 1
+	fi
+	
+	local sysinfo=$(gcom -d "$at_port" -s /etc/gcom/sysinfo.gcom)
+	if echo "$sysinfo" | grep -qi 'NO,'; then
+		logger -t qmi-at "!!! SYSINFO FAILED !!! $sysinfo"
+		# check CSQ  SIMCARD PSRAR  Creg CEREG
+		gcom -d "$at_port" -s /etc/gcom/check_status.gcom > /tmp/at_failed_ret
+		return 1
+	fi
+	
+	if [ "$modem_type" = "EC20" ]; then
+		nettype=$(gcom -d "$at_port" -s /etc/gcom/ec20net.gcom)
+	fi
+	
+	if echo "$nettype" |grep -qi NONE; then
+		logger -t qmi-at "Do not find Network!"
+		return 1
+	fi
+	
+	logger -t qmi-at "Reg Network:$nettype"
+	
+	# to check CSQ & Creg & Cops & IMEI & IMSI .etc
+	if echo "$cardinfo" | grep -qi IMEI; then
+		local imei=$(echo "$cardinfo" | grep -i IMEI)
+		[ ! -s "/tmp/devimeiid" ] && echo "${imei:14:6}" > /tmp/devimeiid
+		echo "imei=${imei#IMEI:}" >> /tmp/3g-info
+		local imsi=$(gcom -d "$at_port" -s /etc/gcom/getimsi.gcom)
+		echo $imsi >> /tmp/3g-info
+		local sig=$(gcom -d "$at_port" -s /etc/gcom/getstrength.gcom)
+		echo "signal=$sig" >> /tmp/3g-info
+		echo $sig > /tmp/sig
+		echo "mac=$(cat /sys/class/net/eth0/address)" >> /tmp/3g-info
+	fi
+	
+	echo "Default" > /tmp/pub_info
+	cat /tmp/3g-info >> /tmp/pub_info
+	#cat /tmp/module_status_file >> /tmp/pub_info
+	
+	if [ "$modem_type" = "EC20" ]; then
+		gcom -d "$at_port" -s /etc/gcom/ec20agps.gcom > /tmp/agps_status
+	fi
+	
+	return 0
+}
+
 proto_qmi_setup() {
 	local interface="$1"
 	local auth_int=0
@@ -63,6 +140,14 @@ proto_qmi_setup() {
 		return 1
 	}
 
+	_get_info_status_by_at "/dev/ttyUSB2"
+	[ $? != 0 ] && {
+		echo "Check AT failed !"
+		proto_notify_error "$interface" CALL_FAILED
+		proto_set_available "$interface" 0
+		return 1
+	}
+	
 	[ -n "$delay" ] && sleep "$delay"
 	
 	#proto_notify_error "$interface" CALL_FAILED
@@ -96,6 +181,7 @@ proto_qmi_setup() {
 	proto_init_update "$ifname" 1
 	proto_send_update "$interface"
 	
+	/etc/init.d/net4g restart
 	return 0
 }
 
