@@ -1,0 +1,190 @@
+diff --git a/modules/luci-base/po/zh-cn/base.po b/modules/luci-base/po/zh-cn/base.po
+index b3afa38..06e613a 100644
+--- a/modules/luci-base/po/zh-cn/base.po
++++ b/modules/luci-base/po/zh-cn/base.po
+@@ -3900,3 +3900,43 @@ msgstr "是"
+ 
+ msgid "« Back"
+ msgstr "« 后退"
++
++msgid "RemoteCtrl"
++msgstr "远程控制"
++
++msgid "Communicate with Server by TCP"
++msgstr "与远程服务器进行通信，上报状态及接受控制指令"
++
++msgid "Remote Configuration"
++msgstr "参数设定"
++
++msgid "remoteipport"
++msgstr "选项"
++
++msgid "Provide Remote Ctrl"
++msgstr "使能控制"
++
++msgid "Dev ID"
++msgstr "设备ID"
++
++msgid "Remote Ip"
++msgstr "远程IP地址"
++
++msgid "Remote Port"
++msgstr "远程端口"
++
++msgid "GPS Info"
++msgstr "GPS信息"
++
++msgid "AGPS Info"
++msgstr "AGPS信息"
++
++msgid "Online Info"
++msgstr "在线状态"
++
++msgid "SimCard Status"
++msgstr "SIM卡状态"
++
++msgid "Signal Strength"
++msgstr "4G信号强度"
++
+diff --git a/modules/luci-mod-admin-full/luasrc/controller/admin/network.lua b/modules/luci-mod-admin-full/luasrc/controller/admin/network.lua
+index 31b9416..0030844 100644
+--- a/modules/luci-mod-admin-full/luasrc/controller/admin/network.lua
++++ b/modules/luci-mod-admin-full/luasrc/controller/admin/network.lua
+@@ -144,6 +144,10 @@ function index()
+ 		page = entry({"admin", "network", "diag_traceroute6"}, post("diag_traceroute6"), nil)
+ 		page.leaf = true
+ --	end
++		page = node("admin", "network", "remote")
++		page.target = cbi("admin_network/remote")
++		page.title  = _("RemoteCtrl")
++		page.order  = 70
+ end
+ 
+ function wifi_join()
+diff --git a/modules/luci-mod-admin-full/luasrc/controller/admin/system.lua b/modules/luci-mod-admin-full/luasrc/controller/admin/system.lua
+index 153615b..7950522 100644
+--- a/modules/luci-mod-admin-full/luasrc/controller/admin/system.lua
++++ b/modules/luci-mod-admin-full/luasrc/controller/admin/system.lua
+@@ -13,7 +13,7 @@ function index()
+ 
+ 	entry({"admin", "system", "admin"}, cbi("admin_system/admin"), _("Administration"), 2)
+ 
+-	if fs.access("/bin/opkg") then
++	if false and fs.access("/bin/opkg") then
+ 		entry({"admin", "system", "packages"}, post_on({ exec = "1" }, "action_packages"), _("Software"), 10)
+ 		entry({"admin", "system", "packages", "ipkg"}, form("admin_system/ipkg"))
+ 	end
+diff --git a/modules/luci-mod-admin-full/luasrc/model/cbi/admin_network/wifi.lua b/modules/luci-mod-admin-full/luasrc/model/cbi/admin_network/wifi.lua
+index d51a72a..f06f399 100644
+--- a/modules/luci-mod-admin-full/luasrc/model/cbi/admin_network/wifi.lua
++++ b/modules/luci-mod-admin-full/luasrc/model/cbi/admin_network/wifi.lua
+@@ -178,17 +178,17 @@ else
+ 
+ 	function ch.cfgvalue(self, section)
+ 		return {
+-			m:get(section, "hwmode") or "",
++			m:get(section, "hwmode") or "11ng",
+ 			m:get(section, "channel") or "auto",
+-			m:get(section, "htmode") or ""
++			m:get(section, "htmode") or "HT40"
+ 		}
+ 	end
+ 
+ 	function ch.formvalue(self, section)
+ 		return {
+-			m:formvalue(self:cbid(section) .. ".band") or (hw_modes.g and "11g" or "11a"),
++			m:formvalue(self:cbid(section) .. ".band") or (hw_modes.g and "11ng" or "11ng"),
+ 			m:formvalue(self:cbid(section) .. ".channel") or "auto",
+-			m:formvalue(self:cbid(section) .. ".htmode") or ""
++			m:formvalue(self:cbid(section) .. ".htmode") or "HT40"
+ 		}
+ 	end
+ 
+@@ -613,6 +613,8 @@ end
+ encr:value("none", "No Encryption")
+ encr:value("wep-open",   translate("WEP Open System"), {mode="ap"}, {mode="sta"}, {mode="ap-wds"}, {mode="sta-wds"}, {mode="adhoc"}, {mode="ahdemo"}, {mode="wds"})
+ encr:value("wep-shared", translate("WEP Shared Key"),  {mode="ap"}, {mode="sta"}, {mode="ap-wds"}, {mode="sta-wds"}, {mode="adhoc"}, {mode="ahdemo"}, {mode="wds"})
++encr:value("psk", "WPA-PSK", {mode="ap"}, {mode="sta"}, {mode="ap-wds"}, {mode="sta-wds"}, {mode="adhoc"})
++encr:value("psk2", "WPA2-PSK", {mode="ap"}, {mode="sta"}, {mode="ap-wds"}, {mode="sta-wds"}, {mode="adhoc"})
+ 
+ if hwtype == "mac80211" or hwtype == "prism2" then
+ 	local supplicant = fs.access("/usr/sbin/wpa_supplicant")
+diff --git a/modules/luci-mod-admin-full/luasrc/view/admin_status/index.htm b/modules/luci-mod-admin-full/luasrc/view/admin_status/index.htm
+index db85350..7fcd438 100644
+--- a/modules/luci-mod-admin-full/luasrc/view/admin_status/index.htm
++++ b/modules/luci-mod-admin-full/luasrc/view/admin_status/index.htm
+@@ -19,6 +19,10 @@
+ 	local boardinfo = luci.util.ubus("system", "board") or { }
+ 	local unameinfo = nixio.uname() or { }
+ 
++	local signum = fs.readfile("/tmp/sig") or "0"
++	local selfver = fs.readfile("/etc/Version") or "V0"
++	local simcard = fs.readfile("/tmp/sim-info") or "Init..."
++	
+ 	local meminfo = sysinfo.memory or {
+ 		total = 0,
+ 		free = 0,
+@@ -47,7 +51,7 @@
+ 
+ 		local rv = {
+ 			uptime     = sysinfo.uptime or 0,
+-			localtime  = os.date(),
++			localtime  = signum,
+ 			loadavg    = sysinfo.load or { 0, 0, 0 },
+ 			memory     = meminfo,
+ 			swap       = swapinfo,
+@@ -338,8 +342,23 @@
+ 
+ 			var e;
+ 
++			var iconsig;
++			var sigint = parseInt(info.localtime) || -1;
++			if (sigint <= 0)
++			    iconsig = "<%=resource%>/icons/signal-none.png";
++			else if (sigint < 20)
++			    iconsig = "<%=resource%>/icons/signal-0-25.png";
++			else if (sigint < 24)
++			    iconsig = "<%=resource%>/icons/signal-25-50.png";
++			else if (sigint < 27)
++			    iconsig = "<%=resource%>/icons/signal-50-75.png";
++			else if (sigint < 32)
++			    iconsig = "<%=resource%>/icons/signal-75-100.png";
++            else 
++			    iconsig = "<%=resource%>/icons/signal-none.png";
++
+ 			if (e = document.getElementById('localtime'))
+-				e.innerHTML = info.localtime;
++				e.innerHTML = String.format('<img src="%s" />',iconsig);
+ 
+ 			if (e = document.getElementById('uptime'))
+ 				e.innerHTML = String.format('%t', info.uptime);
+@@ -396,14 +415,18 @@
+ 
+ 	<div class="table" width="100%">
+ 		<div class="tr"><div class="td left" width="33%"><%:Hostname%></div><div class="td left"><%=luci.sys.hostname() or "?"%></div></div>
+-		<div class="tr"><div class="td left" width="33%"><%:Model%></div><div class="td left"><%=pcdata(boardinfo.model or "?")%></div></div>
+-		<div class="tr"><div class="td left" width="33%"><%:Architecture%></div><div class="td left"><%=pcdata(boardinfo.system or "?")%></div></div>
+-		<div class="tr"><div class="td left" width="33%"><%:Firmware Version%></div><div class="td left">
+-			<%=pcdata(ver.distname)%> <%=pcdata(ver.distversion)%> /
+-			<%=pcdata(ver.luciname)%> (<%=pcdata(ver.luciversion)%>)
++		<div class="tr"><div class="td left" width="33%"><%:Model%></div><div class="td left">ZYRH</div></div>
++		<div class="tr"><div class="td left" width="33%"><%:Firmware Version%></div><div class="td left"><%=pcdata(selfver)%>
+ 		</div></div>
+ 		<div class="tr"><div class="td left" width="33%"><%:Kernel Version%></div><div class="td left"><%=unameinfo.release or "?"%></div></div>
+-		<div class="tr"><div class="td left" width="33%"><%:Local Time%></div><div class="td left" id="localtime">-</div></div>
++		<!--div class="tr"><div class="td left" width="33%"><%:Local Time%></div><div class="td left" id="localtime">-</div></div-->
++
++		<div class="tr"><div class="td left" width="33%"><%:SimCard Status%></div><div class="td left"><%=pcdata(simcard)%></div></div>
++		<div class="tr"><div class="td left" width="33%"><%:Signal Strength%></div>
++			<div class="td left" id="localtime">
++				<p><em><%:Collecting data...%></em></p>
++			</div>
++		</div>
+ 		<div class="tr"><div class="td left" width="33%"><%:Uptime%></div><div class="td left" id="uptime">-</div></div>
+ 		<div class="tr"><div class="td left" width="33%"><%:Load Average%></div><div class="td left" id="loadavg">-</div></div>
+ 	</div>
+@@ -496,4 +519,3 @@
+ 	end
+ -%>
+ 
+-<%+footer%>
