@@ -1,5 +1,6 @@
 #!/bin/sh
 
+# $SEEN has be modifyed at gpio-button.c for VCC detect, 125ms=12.5V
 . /lib/functions.sh
 
 OVERLAY="$( grep ' /overlay ' /proc/mounts )"
@@ -15,12 +16,18 @@ timeout)
 	set_state failsafe
 ;;
 released)
-	if [ "$SEEN" -lt 1 ]
+	if [ "$SEEN" -lt 100 ]
 	then
 		echo "REBOOT" > /dev/console
 		sync
 		reboot
-	elif [ "$SEEN" -ge 5 -a -n "$OVERLAY" ]
+	elif [ "$SEEN" -ge 500 ]
+	then
+		echo "RESET WiFi" > /dev/console
+		rm -f /etc/config/wireless
+		wifi config
+		wifi
+	elif [ "$SEEN" -ge 10000 -a -n "$OVERLAY" ]
 	then
 		echo "FACTORY RESET" > /dev/console
 		jffs2reset -y && reboot &

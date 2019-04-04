@@ -41,6 +41,7 @@ boot() {
 	[ ! -f /etc/config/wireless ] && {
 		# compat for brcm47xx and mvebu
 		sleep 1
+		wifi config
 	}
 
 	/bin/config_generate

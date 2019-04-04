@@ -1,0 +1,21 @@
+
+config wifi-device 'mt7628'
+	option type 'mt7628'
+	option htmode 'HT40'
+	option txpower '20'
+	option hwmode '11g'
+	option band '2G'
+	option country 'US'
+	option region '0'
+	option noscan '1'
+	option channel '1'
+
+config wifi-iface
+	option device 'mt7628'
+	option network 'lan'
+	option mode 'ap'
+	option ifname 'ra0'
+	option ssid 'ZYRH_APV4'
+	option key '11223344'
+	option encryption 'psk-mixed'
+	option disabled '0'

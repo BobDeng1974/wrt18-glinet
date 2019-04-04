@@ -18,6 +18,15 @@ generate_static_wwan_qmi() {
 	EOF
 }
 
+generate_static_wwan_apcli() {
+	uci -q batch <<-EOF
+		delete network.wwan
+		set network.wwan='interface'
+		set network.wwan.ifname='apcli0'
+		set network.wwan.proto='dhcp'
+	EOF
+}
+
 generate_static_network() {
 	uci -q batch <<-EOF
 		delete network.loopback
@@ -423,6 +432,7 @@ if [ ! -s /etc/config/network ]; then
 	touch /etc/config/network
 	generate_static_network
 	generate_static_wwan_qmi
+##	generate_static_wwan_apcli
 	
 	json_get_keys keys network
 	for key in $keys; do generate_network $key; done

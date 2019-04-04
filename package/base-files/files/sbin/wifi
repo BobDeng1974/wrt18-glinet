@@ -231,6 +231,7 @@ scan_wifi() {
 DEVICES=
 DRIVERS=
 include /lib/wifi
+echo "$(date): start wifi..." >/tmp/wifi.log
 scan_wifi
 
 case "$1" in
