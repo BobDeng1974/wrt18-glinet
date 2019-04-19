@@ -5,6 +5,46 @@
 . /lib/functions.sh
 
 #logger "$BUTTON pressed for $SEEN HZ(100)"
-echo "Default" > /tmp/vcc
-echo "voltage:$SEEN" >> /tmp/vcc
+
+_resp_from_wdt_gpio()
+{
+	echo none > /sys/class/leds/heart/trigger
+	echo 0 > /sys/class/leds/heart/brightness
+	sleep 1
+	echo 1 > /sys/class/leds/heart/brightness
+}
+
+_video_ctrl_on_off()
+{
+	echo $1 > /sys/class/leds/hame:red:gpioctrl/brightness
+}
+
+if [ "$SEEN" -eq 6 ]
+then
+	echo "to connect wifi and start video" > /dev/console
+	_video_ctrl_on_off 0
+	_resp_from_wdt_gpio 1
+	/etc/init.d/net4g stop
+	echo timer > /sys/class/leds/heart/trigger
+	echo 300 > /sys/class/leds/heart/delay_on
+	echo 700 > /sys/class/leds/heart/delay_off
+	
+elif [ "$SEEN" -eq 18 ]
+then
+	echo "POWERON video manually" > /dev/console
+	_video_ctrl_on_off 0
+	_resp_from_wdt_gpio 1
+	
+elif [ "$SEEN" -eq 24 ]
+then
+	echo "POWEROFF video automatically" > /dev/console
+	_video_ctrl_on_off 1
+	_resp_from_wdt_gpio 1
+	
+elif [ "$SEEN" -gt 55 ]
+then
+	echo "Default" > /tmp/vcc
+	echo "voltage:$SEEN" >> /tmp/vcc
+fi
+
 return 0
