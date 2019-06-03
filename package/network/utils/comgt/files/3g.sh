@@ -123,6 +123,11 @@ proto_3g_setup() {
 			
 			[ ! -e "/tmp/modem_type" ] && echo $modem_type > /tmp/modem_type
 			
+			if echo "$cardinfo" | grep -qi IMEI; then
+				imei=$(echo "$cardinfo" | grep -i IMEI)
+				[ ! -s "/tmp/devimeiid" ] && echo "${imei:14:6}" > /tmp/devimeiid
+			fi
+			
 			# check sim card
 			local simst=$(gcom -d "$at_port" -s /etc/gcom/checkpin.gcom)
 			echo "simcard=$simst" > /tmp/3g-info
