@@ -4,4 +4,6 @@
 enb="$(uci -q get netset.@netset[0].enable)"
 [ ${enb} = 0 ] && echo timer > /sys/class/leds/heart/trigger
 
+# [ -e "/etc/wifi_up_list" ] && /usr/bin/ap_client /etc/wifi_up_list
+
 exit 0

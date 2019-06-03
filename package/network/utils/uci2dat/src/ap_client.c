@@ -19,6 +19,17 @@
 #include <linux/types.h>
 #include <linux/wireless.h>
 #include <syslog.h>
+#include <signal.h>
+
+#define MAX_WIFI_NUM	(3)
+#define WIFI_UP_LIST	"/etc/wifi_up_list"
+
+typedef struct _wifi_up
+{
+	char ssid[33];
+	char key[33];
+	char valid;
+} st_wifi_up;
 
 struct survey_table
 {
@@ -29,8 +40,11 @@ struct survey_table
 	char *crypto;
 };
 
+static st_wifi_up wifi_ups[MAX_WIFI_NUM];
+
 static struct survey_table st[64];
 static int survey_count = 0;
+static int exit_flag = 0;
 
 #define DEBUG
 
@@ -40,12 +54,6 @@ static int survey_count = 0;
 static int print_f(char *buf)
 {
 	FILE *fp;
-    fp = fopen(LOG_FILE, "r");
-    if (fp == NULL)
-    {
-        return -EIO;
-    }
-    fclose(fp);
 	fp = fopen(LOG_FILE, "a+");
 	if (fp == NULL)
 	{
@@ -59,7 +67,7 @@ int print_log(const char *fmt, ...)
 {
 	va_list args;
 	int i;
-	char buf[512];
+	char buf[512] = {0};
 	va_start(args, fmt);
 	i = vsprintf(buf, fmt, args);
 	va_end(args);
@@ -78,7 +86,7 @@ static void iwpriv(const char *name, const char *key, const char *val)
 {
 	int socket_id;
 	struct iwreq wrq;
-	char data[64];
+	char data[64] = {0};
 
 	snprintf(data, 64, "%s=%s", key, val);
 	socket_id = socket(AF_INET, SOCK_DGRAM, 0);
@@ -158,12 +166,14 @@ static void wifi_site_survey(const char *ifname, int print)
 	if (survey_count == 0 && !print)
 		syslog(LOG_INFO, "No results");
 out:
-	free(s);
+	if(s) free(s);
 }
 
 static struct survey_table* wifi_find_ap(const char *name, const char *bssid)
 {
 	int i,j=1;
+	if(!name && !bssid)
+		return 0;
 //1: find mac addr
 	if (bssid && strlen(bssid)) {
 		for (i = 0; i < survey_count; i++)
@@ -210,7 +220,7 @@ static struct survey_table* wifi_find_ap(const char *name, const char *bssid)
 static void wifi_repeater_start(const char *ifname, const char *staname, const char *channel, const char *ssid,
 				const char *bssid, const char *key, const char *enc, const char *crypto)
 {
-	char buf[100];
+	char buf[100] = {0};
 	int enctype = 0;
 
 	iwpriv(ifname, "Channel", channel);
@@ -249,6 +259,50 @@ static void wifi_repeater_start(const char *ifname, const char *staname, const c
 	system(buf);
 }
 
+int _init_wifi_up_list(void)
+{
+	int ret = -1;
+	char *ptr = NULL;
+	char line[128] = {0};
+	char ssid[128] = {0};
+	char key[128] = {0};
+	
+	int i = 0;
+	FILE *fp = NULL;
+	fp = fopen(WIFI_UP_LIST, "r");
+	if (fp == NULL)
+	{
+		return -EIO;
+	}
+	memset(wifi_ups, 0, sizeof(wifi_ups));
+	
+	for(i=0; i < MAX_WIFI_NUM; i++) {
+		memset(line, 0, sizeof(line));
+		ptr = fgets(line, sizeof(line), fp);
+		if(!ptr) {
+			goto _out;
+		}
+		memset(ssid, 0, sizeof(ssid));
+		memset(key, 0, sizeof(key));
+		ret = sscanf(line, "%s %s", ssid, key);
+		if(ret != 2)
+			continue;
+		if(strlen(ssid) > 32 || strlen(ssid) < 2 ||
+			strlen(key) > 32 || strlen(key) < 8 )
+			continue;
+			
+		strcpy(wifi_ups[i].ssid, ssid);
+		strcpy(wifi_ups[i].key, key);
+		wifi_ups[i].valid = 1;
+		
+		syslog(LOG_INFO, "SET inx %d wifi up info [%s][%s]\n", i, wifi_ups[i].ssid, wifi_ups[i].key);
+	}
+_out:
+	fclose(fp);
+	return ret;
+}
+
+
 int check_assoc(char *ifname)
 {
 	int socket_id, i;
@@ -267,7 +321,7 @@ int check_assoc(char *ifname)
 
 static void assoc_loop(char *ifname, char *staname, char *essid, char *pass, char *bssid)
 {
-	while (1) {
+	while (!exit_flag) {
 		print_log("check:");
 		if (!check_assoc(staname)) {
 			struct survey_table *c;
@@ -281,21 +335,93 @@ static void assoc_loop(char *ifname, char *staname, char *essid, char *pass, cha
 					essid, c->bssid, c->channel, c->security, c->crypto);
 				wifi_repeater_start(ifname, staname, c->channel, essid, bssid, pass, c->security, c->crypto);
 			} else {
-				syslog(LOG_INFO, "No signal found to connect to\n");
+				syslog(LOG_INFO, "No signal found to connect to [%s][%s]\n",essid,bssid);
 			}
 		} else {
-			print_log("%s connect\n",staname);
+			print_log("%s connected. [%s][%s]\n",staname,essid,bssid);
+			//ubus call network.interface.wwan renew
 		}
 		
 		sleep(35);
 	}
 }
 
+static void assoc_loop_list(void)
+{
+	int last_inx = 0;
+	int inx = 0;
+	char *essid = NULL;
+	char *bssid = NULL;
+	char *ifname = "ra0";
+	char *staname = "apcli0";
+	char *pass = NULL;
+	
+	while (!exit_flag) {
+		//print_log("check:");
+		if (!check_assoc(staname)) {
+			struct survey_table *c;
+			//print_log("%s disconnect\n",staname);
+			//print_log("%s is not associated\n", staname);
+			if(inx >= MAX_WIFI_NUM)
+				inx = 0;
+			if(wifi_ups[inx].valid == 0) {
+				syslog(LOG_INFO, "--%d wifi up info is invalid, get next...\n",inx);
+				inx++;
+				sleep(10);
+				continue;
+			}
+			syslog(LOG_INFO, "Scanning for networks...\n");
+			wifi_site_survey(ifname, 0);
+			
+			essid = wifi_ups[inx].ssid;
+			pass = wifi_ups[inx].key;
+			
+			c = wifi_find_ap(essid, bssid);
+			if (c) {
+				syslog(LOG_INFO, "Found network, trying to associate (essid: %s, bssid: %s, channel: %s, enc: %s, crypto: %s)\n",
+					essid, c->bssid, c->channel, c->security, c->crypto);
+				wifi_repeater_start(ifname, staname, c->channel, essid, bssid, pass, c->security, c->crypto);
+			} else {
+				syslog(LOG_INFO, "No signal found to connect to [%s][%s], try next\n",essid,bssid);
+				inx++;
+				sleep(10);
+				continue;
+			}
+		} else {
+			//print_log("%s connected. [%s][%s]\n",staname,essid,bssid);
+			syslog(LOG_INFO, "%s connected. [%s][%s]\n",staname,essid,bssid);
+			if(last_inx != inx) {
+				system("ubus call network.interface.wwan renew");
+				syslog(LOG_INFO, "New wifi up ,to renew IP...\n");
+			}
+			last_inx = inx;
+		}
+		
+		sleep(35);
+	}
+}
+
+void _handle_sig(int sig)
+{
+	if(sig == SIGUSR1)
+		system("ubus call network.interface.wwan renew");
+	else if(sig == SIGUSR2) {
+		print_log("---renew wifi up list...\n");
+		_init_wifi_up_list();
+	} else {
+		exit_flag = 1;
+		iwpriv("apcli0", "ApCliEnable", "0");
+		print_log("---sig %d exit...\n", sig);
+		syslog(LOG_INFO, "---sig %d exit...\n", sig);
+		sync();
+		exit(sig);
+	}
+}
 
 int main(int argc, char **argv)
 {
-	FILE *fp;
-	char path[256];
+	FILE *fp = NULL;
+	char path[256] = {0};
 
 //	if (argc == 3)
 //		return main_led(argc, argv);
@@ -307,13 +433,20 @@ int main(int argc, char **argv)
 			printf("no\n");
 		}
 		return 0;
-	}
-	if (argc < 5) {
+	} else if(argc == 2) {
+		printf("try to connect wifi up from %s\n", argv[1]);
+	} else if (argc < 5) {
 		printf("char *ifname, char *staname, char *essid, char *pass, char *bssid\n");
 		return -1;
 	}
+	signal(SIGINT, _handle_sig);
+	signal(SIGTERM, _handle_sig);
+	signal(SIGUSR1, _handle_sig);
+	signal(SIGUSR2, _handle_sig);
+	signal(SIGPIPE, SIG_IGN);
+	
 	daemon(0, 0);
-	snprintf(path, sizeof(path), "/tmp/apcli-%s.pid", argv[2]);
+	snprintf(path, sizeof(path), "/tmp/run/ap_client.pid");
 	fp = fopen(path, "w+");
 	if (fp) {
 		fprintf(fp, "%d", getpid());
@@ -323,10 +456,15 @@ int main(int argc, char **argv)
 	setbuf(stdout, NULL);
 	openlog("ap_client", 0, 0);
 
-
+	_init_wifi_up_list();
 //	led_set_trigger(1);
 //	print_log("loop:%s,%s,%s,%s,%s,%s,%s\n",argv[1], argv[2], argv[3], argv[4], argv[5], argv[6],argv[7]);
-	assoc_loop(argv[1], argv[2], argv[3], argv[4], argv[5]);
-
+	if(argc == 2)
+		assoc_loop_list();
+	else
+		assoc_loop(argv[1], argv[2], argv[3], argv[4], argv[5]);
+	
+	print_log("exit\n");
+	
 	return 0;
 }

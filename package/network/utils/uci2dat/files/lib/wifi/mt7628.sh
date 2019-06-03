@@ -48,6 +48,16 @@ config wifi-iface
 	option ifname 'ra0'
 	option disabled '0'
 
+config wifi-iface 'sta'
+	option device 'mt7628'
+	option mode 'sta'
+	option network 'wwan'
+	option ifname 'apcli0'
+	option encryption 'psk2'
+	option ssid 'upwifi'
+	option key 'upwifi-pwd'
+	option disabled '0'
+
 EOF
 
 }

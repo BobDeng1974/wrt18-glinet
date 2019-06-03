@@ -245,7 +245,7 @@ generate_static_system() {
 		delete system.@system[0]
 		add system system
 		set system.@system[-1].hostname='OpenWrt'
-		set system.@system[-1].timezone='UTC'
+		set system.@system[-1].timezone='CST-8'
 		set system.@system[-1].ttylogin='0'
 		set system.@system[-1].log_size='64'
 		set system.@system[-1].urandom_seed='0'
@@ -432,7 +432,7 @@ if [ ! -s /etc/config/network ]; then
 	touch /etc/config/network
 	generate_static_network
 	generate_static_wwan_qmi
-##	generate_static_wwan_apcli
+	generate_static_wwan_apcli
 	
 	json_get_keys keys network
 	for key in $keys; do generate_network $key; done

@@ -5,6 +5,23 @@
 #include <signal.h>
 #include <pthread.h>
 #include <syslog.h>
+#include <string.h>
+#include <stdlib.h>
+#include <glob.h>
+#include <errno.h>
+#include <sys/sysmacros.h>
+#include <sys/utsname.h>
+#include <sys/mount.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <linux/un.h>
+#include <poll.h>
+#include <assert.h>
+#include <linux/if.h>
+#include <linux/types.h>
+#include <linux/wireless.h>
+
 #include <iostream>
 #include "netsdk.h"
 #include "post.h"
@@ -160,6 +177,23 @@ int _fDownLoadDataCallBack(long lRealHandle, long dwDataType, unsigned char *pBu
 	return TRUE;
 }
 
+int check_assoc(char *ifname)
+{
+	int socket_id, i;
+	struct iwreq wrq;
+
+	socket_id = socket(AF_INET, SOCK_DGRAM, 0);
+	strcpy(wrq.ifr_ifrn.ifrn_name, ifname);
+	ioctl(socket_id, SIOCGIWAP, &wrq);
+	close(socket_id);
+
+	for (i = 0; i < 6; i++)
+		if(wrq.u.ap_addr.sa_data[i])
+			return 1;
+	return 0;
+}
+
+
 void* _post_handle(void *arg)
 {
 	printf("in post thread hd...\n");
@@ -177,6 +211,11 @@ void* _post_handle(void *arg)
 	while((rdlen=read(pt_pipe[0], data, sizeof(data))) > 0) {
 		//printf("rd %d\n", rdlen);
 	_again:
+		if(check_assoc("apcli0") == 0) {
+			syslog(LOG_INFO,"post waiting wifi up ok...\n");
+			sleep(3);
+			goto _again;
+		}
 		ret = post_content(glb_fd, 1, cur_post_file, cur_post_pos, data, rdlen);
 		if(ret > 0) {
 			cur_post_pos = ret;
@@ -219,19 +258,35 @@ void _sig_handle(int sig)
 
 int  main(int argc, char **argv)
 {
-	if(argc < 4) {
-		printf("$s devid ipaddr port\n",argv[0]);
+	int connok = 0;
+	if(argc < 5) {
+		printf("$s devid ipaddr port -d\n",argv[0]);
 		return -1;
 	}
-	openlog("ipcnet", LOG_CONS | LOG_PID, 0);
 	
+	openlog("ipcnet", LOG_CONS | LOG_PID, 0);
 	syslog(LOG_INFO, "start %s %s %s %s\n",argv[0],argv[1],argv[2],argv[3]);
 	
+	while(connok < 5) {
+		if(check_assoc("apcli0"))
+			connok++;
+		else {
+			connok = 0;
+			syslog(LOG_INFO, "wifi up is disconnected");
+		}
+		sleep(3);
+	}
+
 	g_pFile=NULL;
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGINT, _sig_handle);
 	signal(SIGTERM, _sig_handle);
 	
+	if(strcmp("-d",argv[4]) == 0) {
+		daemon(0,0);
+		setbuf(stdout, NULL);
+	}
+
 	H264_DVR_Init(_fDisConnect,NULL);
 	printf("H264_DVR_Init\n");
 #ifdef POST_TASK
@@ -271,13 +326,19 @@ int  main(int argc, char **argv)
 		printf("Call H264_DVR_StartActiveRigister**********wrong!");
 	}
 #else
+_login:
 	H264_DVR_DEVICEINFO OutDev;	
 	memset(&OutDev,0,sizeof(OutDev));
 	int nError = 0;			
 	g_LoginID = H264_DVR_Login((char*)argv[2], atoi(argv[3]), (char*)"admin",(char*)"",(LPH264_DVR_DEVICEINFO)(&OutDev),&nError);	
 	printf("g_LoginID=%d,nError:%d\n",g_LoginID,nError);
 	syslog(LOG_INFO, "g_LoginID=%d,nError:%d\n",g_LoginID,nError);
-	
+	if(g_LoginID < 0) {
+		syslog(LOG_INFO, "try login ipc again...\n");
+		sleep(5);
+		goto _login;
+	}
+
 	/*if(g_LoginID)
 	{
 		SDK_ChannelNameConfigAll ChannelName;
@@ -328,7 +389,7 @@ int  main(int argc, char **argv)
 	
 	findInfo.startTime.dwYear = tt->tm_year+1900;
 	findInfo.startTime.dwMonth = tt->tm_mon+1 - 1; //last month
-	findInfo.startTime.dwDay = 25;
+	findInfo.startTime.dwDay = tt->tm_mday;
 	findInfo.startTime.dwHour = 0;
 	findInfo.startTime.dwMinute = 0;
 	findInfo.startTime.dwSecond = 0;
@@ -404,6 +465,7 @@ int  main(int argc, char **argv)
 				per = H264_DVR_GetDownloadPos(lRet);
 				cur_dl_per = per;
 				printf("\n===dl %d%%===\n", per);
+				//syslog(LOG_INFO, "=====dl %d%%=====\n", per);
 				if( (per == 100) && (less_flag++ > 3) ) {
 					//if send currently recording file ,file size is increasing , read dl size < file size;
 					printf("get per 100, but real dl size %d < file size %d\n",cur_dl_size,cur_file_size*1024);
