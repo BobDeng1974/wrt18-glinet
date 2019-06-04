@@ -67,6 +67,9 @@ define Package/xmipcnet/install
 	$(INSTALL_DIR) $(1)/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/xmipcnet $(1)/bin/
 	
+	$(INSTALL_DIR) $(1)/sbin
+	$(INSTALL_BIN) ./files/ipc_renew.sh $(1)/sbin/
+
 	$(INSTALL_DIR) $(1)/usr/lib
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/libxmnetsdk.so $(1)/usr/lib
 	
@@ -74,7 +77,7 @@ define Package/xmipcnet/install
 	$(INSTALL_CONF) ./files/ipc_cfg.conf $(1)/etc/config/ipc_cfg
 	
 	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/ipc_renew.init $(1)/etc/init.d/ipc_renew
+	$(INSTALL_BIN) ./files/ipc_renew.init $(1)/etc/init.d/ipc
 endef
 
 # This line executes the necessary commands to compile our program.

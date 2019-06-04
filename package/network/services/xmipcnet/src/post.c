@@ -146,6 +146,29 @@ _success:
     return ret;
 }
 
+int post_last_time(int type, char* devid)
+{
+    int utc_sec = 0;
+    int ret = 0;
+    int fd = 0;
+    fd = _http_connect(IP_ADDR, IP_PORT);
+    if(fd < 0)
+        return SOCK_ERR;
+	
+	char msg[128] = {0};
+	sprintf(msg, "deviceCode=%s&fileType=%d",devid,type);
+	
+    ret = _http_post(fd, PAGE_LAST_TIME, msg, &utc_sec);
+    printf("<---http post get last time, ret %d, get time %d\n", ret, utc_sec);
+	if(ret == 0) {
+		_http_close(fd);
+		return utc_sec;
+	} else {
+        _http_close(fd);
+		return ret;
+    }
+}
+
 int post_start(int type, char *name, int *position)
 {
     int ret = 0;

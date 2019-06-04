@@ -268,6 +268,7 @@ void _sig_handle(int sig)
 
 int  main(int argc, char **argv)
 {
+	int ret = 0;
 	int connok = 0;
 	if(argc < 5) {
 		printf("$s devid ipaddr port -d\n",argv[0]);
@@ -390,28 +391,46 @@ _login:
 	
 #endif
 	
+	
+	tm *st = NULL;
+	time_t last_tt = time(NULL);
+	connok = 0;
+_getagain:
+	ret = post_last_time(1, argv[1]);
+	if(ret <= 0) {
+		syslog(LOG_INFO, "--post %s get last time error! %d\n", argv[1],ret);
+		sleep(3);
+		if(connok++ < 3)
+			goto _getagain;
+
+		st = localtime(&last_tt);
+		st->tm_mon--; //last month
+	} else {
+		last_tt = ret;
+		st = localtime(&last_tt);
+	}
+
 	H264_DVR_FINDINFO findInfo;
 	findInfo.nChannelN0=0;
 	findInfo.nFileType = SDK_RECORD_ALARM; //文件类型, 见 SDK_File_Type, 0-all
 	
+	findInfo.startTime.dwYear = st->tm_year+1900;
+	findInfo.startTime.dwMonth = st->tm_mon+1; 
+	findInfo.startTime.dwDay = st->tm_mday;
+	findInfo.startTime.dwHour = st->tm_hour;
+	findInfo.startTime.dwMinute = st->tm_min;
+	findInfo.startTime.dwSecond = st->tm_sec;
+
 	time_t t = time(NULL);
-	tm * tt= localtime(&t);
-
-	findInfo.startTime.dwYear = tt->tm_year+1900;
-	findInfo.startTime.dwMonth = (tt->tm_mon==0)?1:tt->tm_mon; //last month
-	findInfo.startTime.dwDay = tt->tm_mday;
-	findInfo.startTime.dwHour = 0;
-	findInfo.startTime.dwMinute = 0;
-	findInfo.startTime.dwSecond = 0;
-
-	findInfo.endTime.dwYear = tt->tm_year+1900;
-	findInfo.endTime.dwMonth = tt->tm_mon+1;
-	findInfo.endTime.dwDay = tt->tm_mday;
+	tm *now= localtime(&t);
+	findInfo.endTime.dwYear = now->tm_year+1900;
+	findInfo.endTime.dwMonth = now->tm_mon+1;
+	findInfo.endTime.dwDay = now->tm_mday;
 	findInfo.endTime.dwHour = 23;
 	findInfo.endTime.dwMinute = 59;
 	findInfo.endTime.dwSecond = 59;
 
-	H264_DVR_FILE_DATA *pData = new H264_DVR_FILE_DATA[64];
+	H264_DVR_FILE_DATA *pData = new H264_DVR_FILE_DATA[128];
 	int nFindCount = 0;
 	int i = 0;
 	char cmd[512] = {0};
@@ -429,7 +448,7 @@ _login:
 		findInfo.endTime.dwYear,findInfo.endTime.dwMonth,findInfo.endTime.dwDay,
 		findInfo.endTime.dwHour,findInfo.endTime.dwMinute,findInfo.endTime.dwSecond);
 		
-	long lRet= H264_DVR_FindFile(g_LoginID, &findInfo, pData, 64, &nFindCount, 5000);
+	long lRet= H264_DVR_FindFile(g_LoginID, &findInfo, pData, 128, &nFindCount, 5000);
 	if(lRet>0&&nFindCount>0)
 	{
 	   	printf("search success,playback file num=%d\n", nFindCount);
@@ -542,16 +561,16 @@ _login:
 				 	memset(&info, 0, sizeof(info));
 				 	info.nChannelN0=0;
 				 	info.nFileType=0;
-				 	info.startTime.dwYear = tt->tm_year+1900;
-				 	info.startTime.dwMonth = tt->tm_mon+1;
-				 	info.startTime.dwDay = tt->tm_mday;
+				 	info.startTime.dwYear = st->tm_year+1900;
+				 	info.startTime.dwMonth = st->tm_mon+1;
+				 	info.startTime.dwDay = st->tm_mday;
 				 	info.startTime.dwHour = 0;
 				 	info.startTime.dwMinute = 0;
 				 	info.startTime.dwSecond = 0;
 				 
-				 	info.endTime.dwYear = tt->tm_year+1900;
-				 	info.endTime.dwMonth = tt->tm_mon+1;
-				 	info.endTime.dwDay = tt->tm_mday;
+				 	info.endTime.dwYear = now->tm_year+1900;
+				 	info.endTime.dwMonth = now->tm_mon+1;
+				 	info.endTime.dwDay = now->tm_mday;
 				 	info.endTime.dwHour = 23;
 				 	info.endTime.dwMinute = 59;
 				 	info.endTime.dwSecond = 59;

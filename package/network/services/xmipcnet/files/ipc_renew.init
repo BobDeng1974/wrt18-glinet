@@ -6,6 +6,8 @@ START=85
 EXEC=xmipcnet
 
 start() {
+	return 0
+
 	enb="$(uci -q get ipc_cfg.cfg.enable)"
 	ip="$(uci -q get ipc_cfg.cfg.ipaddr)"
 	port="$(uci -q get ipc_cfg.cfg.port)"

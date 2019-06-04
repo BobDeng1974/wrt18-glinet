@@ -389,7 +389,7 @@ static void assoc_loop_list(void)
 			}
 		} else {
 			//print_log("%s connected. [%s][%s]\n",staname,essid,bssid);
-			syslog(LOG_INFO, "%s connected. [%s][%s]\n",staname,essid,bssid);
+			//syslog(LOG_INFO, "%s connected. [%s][%s]\n",staname,essid,bssid);
 			if(last_inx != inx) {
 				system("ubus call network.interface.wwan renew");
 				syslog(LOG_INFO, "New wifi up ,to renew IP...\n");

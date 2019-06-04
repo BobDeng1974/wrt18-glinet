@@ -32,7 +32,7 @@ then
 	#echo 700 > /sys/class/leds/heart/delay_off
 	
 	pidof ap_client || /usr/bin/ap_client /etc/wifi_up_list
-	pidof xmipcnet || /etc/init.d/ipc_renew start
+	pidof xmipcnet || /sbin/ipc_renew.sh
 
 elif [ "$SEEN" -eq 18 ]
 then
