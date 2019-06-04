@@ -275,6 +275,11 @@ int  main(int argc, char **argv)
 		return -1;
 	}
 	
+	g_pFile=NULL;
+	signal(SIGPIPE, SIG_IGN);
+	signal(SIGINT, _sig_handle);
+	signal(SIGTERM, _sig_handle);
+
 	openlog("ipcnet", LOG_CONS | LOG_PID, 0);
 	syslog(LOG_INFO, "start %s %s %s %s\n",argv[0],argv[1],argv[2],argv[3]);
 	
@@ -285,13 +290,8 @@ int  main(int argc, char **argv)
 			connok = 0;
 			syslog(LOG_INFO, "wifi up is disconnected");
 		}
-		sleep(3);
+		sleep(2);
 	}
-
-	g_pFile=NULL;
-	signal(SIGPIPE, SIG_IGN);
-	signal(SIGINT, _sig_handle);
-	signal(SIGTERM, _sig_handle);
 	
 	if(strcmp("-d",argv[4]) == 0) {
 		daemon(0,0);
@@ -300,17 +300,6 @@ int  main(int argc, char **argv)
 
 	H264_DVR_Init(_fDisConnect,NULL);
 	printf("H264_DVR_Init\n");
-#ifdef POST_TASK
-	if(pipe(pt_pipe) == -1) {
-		perror("pipe");
-	}
-	pthread_t ptid;
-	if(pthread_create(&ptid, NULL, _post_handle, NULL))
-	{
-		printf("Create post pthread error\n");
-	}
-	pthread_detach(ptid);
-#endif
 
 #ifdef SearchDevice
 	int ret = pthread_create(&id, NULL,SearchDeviceThread, NULL);
@@ -337,6 +326,8 @@ int  main(int argc, char **argv)
 		printf("Call H264_DVR_StartActiveRigister**********wrong!");
 	}
 #else
+
+	connok = 0;
 _login:
 	H264_DVR_DEVICEINFO OutDev;	
 	memset(&OutDev,0,sizeof(OutDev));
@@ -345,52 +336,33 @@ _login:
 	printf("g_LoginID=%d,nError:%d\n",g_LoginID,nError);
 	syslog(LOG_INFO, "g_LoginID=%d,nError:%d\n",g_LoginID,nError);
 	if(g_LoginID < 0) {
-		syslog(LOG_INFO, "try login ipc again...\n");
+		syslog(LOG_INFO, "try login ipc again %d...\n", connok);
 		sleep(5);
-		goto _login;
-	}
-
-	/*if(g_LoginID)
-	{
-		SDK_ChannelNameConfigAll ChannelName;
-		memset(&ChannelName, 0, sizeof(SDK_ChannelNameConfigAll));
-		memcpy(ChannelName[0],"陈间", sizeof("陈间"));
-		int nRet = H264_DVR_SetDevConfig(g_LoginID, E_SDK_CONFIG_CHANNEL_NAME, -1, (char*)&ChannelName, sizeof(SDK_ChannelNameConfigAll), 3000);
-		if(nRet)
+		if(connok++ < 5)
+			goto _login;
+		else
 		{
-			printf("设置成功了\n");
+			syslog(LOG_INFO, "---login failed! to exit...\n");
+			exit(1);
 		}
-	}*/
-	//pthread_t handle;
-	//pthread_create(&handle,NULL,START_ROUTINE,NULL);
-	
-#ifdef ADDUSER	
-	USER_INFO userInfo;	
-	strcpy(userInfo.Groupname,"admin");	
-	strcpy(userInfo.memo,"");
-	strcpy(userInfo.name,"12345");
-	strcpy(userInfo.passWord,"");
-
-	userInfo.reserved=false;
-	userInfo.rigthNum=5;
-	strcpy(userInfo.rights[0],"ShutDown");
-	strcpy(userInfo.rights[1],"ChannelTitle");
-	strcpy(userInfo.rights[2],"RecordConfig");
-	strcpy(userInfo.rights[3],"Replay_01");
-	strcpy(userInfo.rights[4],"Monitor_01");
-	userInfo.shareable=true;
-	long lRet2 = H264_DVR_SetDevConfig(g_LoginID, E_SDK_CONFIG_ADD_USER, -1, (char*)&userInfo, sizeof(userInfo), 10000);
-	if(lRet2 >0)
-	{
-	   printf("add user ok\n");
-	}else
-	{
-	   printf("add user err\n");
 	}
+
+#ifdef POST_TASK
+	if(pipe(pt_pipe) == -1) {
+		perror("pipe");
+	}
+	pthread_t ptid;
+	if(pthread_create(&ptid, NULL, _post_handle, NULL))
+	{
+		H264_DVR_Logout(g_LoginID);
+		printf("Create post pthread error\n");
+		syslog(LOG_INFO, "Create post pthread error\n");
+		exit(1);
+	}
+	pthread_detach(ptid);
 #endif
 	
-#endif
-	
+#endif //DAS
 	
 	tm *st = NULL;
 	time_t last_tt = time(NULL);
@@ -498,6 +470,7 @@ _getagain:
 				if( (per == 100) && (less_flag++ > 3) ) {
 					//if send currently recording file ,file size is increasing , read dl size < file size;
 					printf("get per 100, but real dl size %d < file size %d\n",cur_dl_size,cur_file_size*1024);
+					syslog(LOG_INFO, "get per 100, but real dl size %d < file size %d\n",cur_dl_size,cur_file_size*1024);
 					break;
 				}
 				sleep(3);
@@ -520,7 +493,7 @@ _getagain:
 			system(cmd);
 			sync();
 			if(++i > (nFindCount-1))
-				printf("dl and post all files! to stop dl.\n");
+				printf("dl and post all files %d! to stop dl.\n", nFindCount);
 			else {
 				printf("continue to post new file\n");
 				goto _next;
@@ -557,25 +530,25 @@ _getagain:
 
 
 	//»Ø·Å
-					H264_DVR_FINDINFO info;
-				 	memset(&info, 0, sizeof(info));
-				 	info.nChannelN0=0;
-				 	info.nFileType=0;
-				 	info.startTime.dwYear = st->tm_year+1900;
-				 	info.startTime.dwMonth = st->tm_mon+1;
-				 	info.startTime.dwDay = st->tm_mday;
-				 	info.startTime.dwHour = 0;
-				 	info.startTime.dwMinute = 0;
-				 	info.startTime.dwSecond = 0;
-				 
-				 	info.endTime.dwYear = now->tm_year+1900;
-				 	info.endTime.dwMonth = now->tm_mon+1;
-				 	info.endTime.dwDay = now->tm_mday;
-				 	info.endTime.dwHour = 23;
-				 	info.endTime.dwMinute = 59;
-				 	info.endTime.dwSecond = 59;
-				 	g_pFile = fopen("testPlayBack", "wb+");
-					long ret=0;
+		H264_DVR_FINDINFO info;
+		memset(&info, 0, sizeof(info));
+		info.nChannelN0=0;
+		info.nFileType=0;
+		info.startTime.dwYear = st->tm_year+1900;
+		info.startTime.dwMonth = st->tm_mon+1;
+		info.startTime.dwDay = st->tm_mday;
+		info.startTime.dwHour = 0;
+		info.startTime.dwMinute = 0;
+		info.startTime.dwSecond = 0;
+		
+		info.endTime.dwYear = now->tm_year+1900;
+		info.endTime.dwMonth = now->tm_mon+1;
+		info.endTime.dwDay = now->tm_mday;
+		info.endTime.dwHour = 23;
+		info.endTime.dwMinute = 59;
+		info.endTime.dwSecond = 59;
+		g_pFile = fopen("testPlayBack", "wb+");
+		long ret=0;
 				 
 #ifdef PlayBack_BYTIME
 				 	ret=H264_DVR_PlayBackByTime(g_LoginID,&info,NULL,NetDataCallBack,1);
@@ -741,10 +714,12 @@ _getagain:
 	{
 		H264_DVR_Logout(g_LoginID);
 		printf("Logout success!!!\n");
+		syslog(LOG_INFO, "Logout success!!!\n");
 	}
 	sleep(1);
 	H264_DVR_Cleanup();
 	printf("*******H264_DVR_Cleanup*******\n");
+	syslog(LOG_INFO, "*******H264_DVR_Cleanup*******\n");
 
 	if(g_pFile)
 	{
