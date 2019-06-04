@@ -74,6 +74,10 @@ enum {
 	MSG_INFO_OTHER,
 	MSG_INFO_VCC,
 	//end
+	MSG_INFO_WIFIUP,
+	MSG_INFO_WIFIUP_SSID,
+	MSG_INFO_WIFIUP_KEY,
+
 	MAG_VAL_MAX
 };
 
@@ -130,6 +134,8 @@ int parse_json_ppp_cfg(const char *text,int *seq,char *dialtype,char *apn,char *
 
 int parse_json_tty_trans(const char *text, int *seq, char *outcmd);
 int parse_json_tty_cfg(const char *text,int *seq, ST_UART *uart_attr);
+
+int parse_json_wifiup_cfg(const char *text,int *seq);
 
 #endif
 

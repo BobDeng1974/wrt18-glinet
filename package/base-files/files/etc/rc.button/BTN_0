@@ -22,12 +22,14 @@ _video_ctrl_on_off()
 if [ "$SEEN" -eq 6 ]
 then
 	echo "to connect wifi and start video" > /dev/console
+	logger -t BTN_0  "to connect wifi and start video"
+
 	_video_ctrl_on_off 0
 	_resp_from_wdt_gpio 1
 	/etc/init.d/net4g stop
-	echo timer > /sys/class/leds/heart/trigger
-	echo 300 > /sys/class/leds/heart/delay_on
-	echo 700 > /sys/class/leds/heart/delay_off
+	#echo timer > /sys/class/leds/heart/trigger
+	#echo 300 > /sys/class/leds/heart/delay_on
+	#echo 700 > /sys/class/leds/heart/delay_off
 	
 	pidof ap_client || /usr/bin/ap_client /etc/wifi_up_list
 	pidof xmipcnet || /etc/init.d/ipc_renew start
@@ -35,12 +37,16 @@ then
 elif [ "$SEEN" -eq 18 ]
 then
 	echo "POWERON video manually" > /dev/console
+	logger -t BTN_0  "POWERON video manually"
+
 	_video_ctrl_on_off 0
 	_resp_from_wdt_gpio 1
 	
 elif [ "$SEEN" -eq 24 ]
 then
 	echo "POWEROFF video automatically" > /dev/console
+	logger -t BTN_0 "POWERON video automatically"
+	
 	_video_ctrl_on_off 1
 	_resp_from_wdt_gpio 1
 	

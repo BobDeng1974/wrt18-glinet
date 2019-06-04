@@ -243,16 +243,26 @@ void* _post_handle(void *arg)
 	printf("out post thread hd...\n");
 	return NULL;
 }
+
+void _resp_mcu_heart()
+{
+	system("echo timer > /sys/class/leds/heart/trigger");
+	system("echo 300 > /sys/class/leds/heart/delay_on");
+	system("echo 700 > /sys/class/leds/heart/delay_off");
+}
+
 void _fDisConnect(long lLoginID, char *pchDVRIP, long nDVRPort, unsigned long dwUser)
 {
 	printf("---%d---netsdk disconnect------\n",lLoginID);
 	syslog(LOG_INFO, "---%d---netsdk disconnect------\n",lLoginID);
+	_resp_mcu_heart();
 	exit(1);
 }
 
 void _sig_handle(int sig)
 {
 	syslog(LOG_INFO, "main exit by sig %d\n", sig);
+	_resp_mcu_heart();
 	exit(sig);
 }
 
@@ -382,13 +392,13 @@ _login:
 	
 	H264_DVR_FINDINFO findInfo;
 	findInfo.nChannelN0=0;
-	findInfo.nFileType=0;			//文件类型, 见SDK_File_Type
+	findInfo.nFileType = SDK_RECORD_ALARM; //文件类型, 见 SDK_File_Type, 0-all
 	
 	time_t t = time(NULL);
 	tm * tt= localtime(&t);
-	
+
 	findInfo.startTime.dwYear = tt->tm_year+1900;
-	findInfo.startTime.dwMonth = tt->tm_mon+1 - 1; //last month
+	findInfo.startTime.dwMonth = (tt->tm_mon==0)?1:tt->tm_mon; //last month
 	findInfo.startTime.dwDay = tt->tm_mday;
 	findInfo.startTime.dwHour = 0;
 	findInfo.startTime.dwMinute = 0;
@@ -580,7 +590,10 @@ _login:
 	
 	} else {
 		printf("do NOT found any record file %d\n",nFindCount);
+		syslog(LOG_INFO, "do NOT found any record file %d\n",nFindCount);
 	}
+	syslog(LOG_INFO, "---resp mcu ,heart 300-700 ms\n");
+	_resp_mcu_heart();
 	
  	if(g_LoginID>0)
  	{

@@ -20,8 +20,8 @@ start() {
 			devid="$macaddr"
 		fi
 	}
-	
-	[ ${enb} -gt 0 ] && /bin/${EXEC} $devid $ip $port &
+	# -d, run as daemon; -f, run foregroud
+	[ ${enb} -gt 0 ] && /bin/${EXEC} $devid $ip $port -f &
 }
 
 stop() {

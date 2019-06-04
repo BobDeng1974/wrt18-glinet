@@ -95,6 +95,10 @@ MSG_KEY msg_key[MAG_VAL_MAX+1] = {
 	[MSG_INFO_OTHER] = {"other",MSG_INFO_OTHER},
 	[MSG_INFO_VCC] = {"voltage",MSG_INFO_VCC},
 	
+	[MSG_INFO_WIFIUP] = {"setwifiuplist",MSG_INFO_WIFIUP},
+	[MSG_INFO_WIFIUP_SSID] = {"ssid",MSG_INFO_WIFIUP_SSID},
+	[MSG_INFO_WIFIUP_KEY] = {"key",MSG_INFO_WIFIUP_KEY},
+
 	[MAG_VAL_MAX] = {"null",MAG_VAL_MAX}
 };
 #else
@@ -716,6 +720,53 @@ int parse_json_tty_cfg(const char *text,int *seq, ST_UART *uart_attr)
 			}
 			
 			ret = 0;
+		}
+	}
+EXIT:
+	cJSON_Delete(json_fmt);
+	json_fmt = NULL;
+	return ret;
+}
+
+int parse_json_wifiup_cfg(const char *text,int *seq)
+{
+	int ret = -1;
+	int size = 0;
+	int i = 0;
+	cJSON *sub_json = NULL,*body_json = NULL;
+	cJSON *json_fmt = cJSON_Parse(text);
+	if (!json_fmt) {
+		ERROR("Error before: [%s]\n",cJSON_GetErrorPtr());
+		return -1;
+	} else {
+		if((sub_json=GET_KEY(json_fmt,MSG_SEQNUM))) {
+			*seq = atoi(sub_json->valuestring);
+			DEBUG("[Get] seqnum=%d\n",*seq);
+		} else {
+			goto EXIT;
+		}
+		
+		if((body_json=GET_KEY(json_fmt,MSG_BODY))) {
+			if(body_json->type != cJSON_Array) {
+				ERROR("Error wifiup body type: [%d]\n", body_json->type);
+				goto EXIT;
+			}
+			size = cJSON_GetArraySize(body_json);
+			if(size <= 0) {
+				ERROR("Error wifiup body size: [%d]\n", size);
+				goto EXIT;
+			}
+			FILE *fp = fopen("/etc/wifi_up_list","w+");
+			cJSON *item = NULL;
+			char buf[64] = {0};
+			for(i=0;i<size;i++) {
+				item = cJSON_GetArrayItemOfIndex(body_json, i);
+				if(!item) {fclose(fp);goto EXIT;}
+				sprintf(buf,"%s %s\n",STR_OF_KEY(item,MSG_INFO_WIFIUP_SSID), STR_OF_KEY(item,MSG_INFO_WIFIUP_KEY));
+				fwrite(buf,1,strlen(buf),fp);
+			}
+			fclose(fp);
+			ret = i;
 		}
 	}
 EXIT:

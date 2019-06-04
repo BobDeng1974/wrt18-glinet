@@ -1434,6 +1434,17 @@ static int handle_msg(int socket, char *recv_buf)
 			SEND_RESP(socket,"failure","format error",99,"set232parameters");
 		}
 		
+	} else if(strstr(recv_buf,"setwifiuplist")) {
+		ret = parse_json_wifiup_cfg(recv_buf,&seq);
+		if(ret > 0) {
+			NOTE("send usr2 to ap_client ,renew wifi up list\n");
+			system("pidof ap_client && kill -usr2 ap_client");
+			SEND_RESP(socket,"success","set wifi up ok",seq,"setwifiuplist");
+		}
+		else {
+			SEND_RESP(socket,"failure","format error",seq,"setwifiuplist");
+		}
+
 	} else if(strstr(recv_buf,"respcode")) {
 		//ret = parse_json_seqnum(recv_buf);
 		NOTE("[Get Svr],response msg,%s!\n",recv_buf);
