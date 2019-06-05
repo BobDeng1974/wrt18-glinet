@@ -281,6 +281,7 @@ int  main(int argc, char **argv)
 	signal(SIGTERM, _sig_handle);
 
 	openlog("ipcnet", LOG_CONS | LOG_PID, 0);
+	//1-devid, 2-ipaddr, 3-port, 4: -d/-f
 	syslog(LOG_INFO, "start %s %s %s %s\n",argv[0],argv[1],argv[2],argv[3]);
 	
 	while(connok < 5) {
@@ -347,6 +348,8 @@ _login:
 		}
 	}
 
+if(strcmp("-c",argv[4])) {
+	
 #ifdef POST_TASK
 	if(pipe(pt_pipe) == -1) {
 		perror("pipe");
@@ -361,6 +364,8 @@ _login:
 	}
 	pthread_detach(ptid);
 #endif
+
+}
 	
 #endif //DAS
 	
@@ -426,7 +431,20 @@ _getagain:
 	   	printf("search success,playback file num=%d\n", nFindCount);
 		syslog(LOG_INFO, "search success,playback file num=%d\n", nFindCount);
 		
-		//for(i=0; i < nFindCount; i++) {
+		if(strcmp("-c",argv[4]) == 0) {
+			//xmipcnet devid ip port -c
+			//for web cmd to check record file
+			for(i=0; i < nFindCount; i++) {
+				printf("%s_%04d%02d%02d%02d%02d%02d_%04d%02d%02d%02d%02d%02d_%02d.h264\n",argv[1],
+				pData[i].stBeginTime.year, pData[i].stBeginTime.month, pData[i].stBeginTime.day,
+				pData[i].stBeginTime.hour, pData[i].stBeginTime.minute, pData[i].stBeginTime.second,
+				pData[i].stEndTime.year, pData[i].stEndTime.month, pData[i].stEndTime.day,
+				pData[i].stEndTime.hour, pData[i].stEndTime.minute, pData[i].stEndTime.second, pData[i].ch);
+			}
+			H264_DVR_Logout(g_LoginID);
+			H264_DVR_Cleanup();
+			exit(1);
+		}
 	_next:
 			per = 0;
 			cur_dl_size = 0;
