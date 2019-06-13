@@ -26,7 +26,9 @@ then
 
 	_video_ctrl_on_off 0
 	_resp_from_wdt_gpio 1
-	/etc/init.d/net4g stop
+	#create "/tmp/heartbeatctrl" to stop watchdog heartbeat
+	#killall -usr1 net4g
+	
 	#echo timer > /sys/class/leds/heart/trigger
 	#echo 300 > /sys/class/leds/heart/delay_on
 	#echo 700 > /sys/class/leds/heart/delay_off

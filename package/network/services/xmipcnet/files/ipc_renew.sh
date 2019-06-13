@@ -17,7 +17,7 @@ start() {
 			devid="$macaddr"
 		fi
 	}
-	# -d, run as daemon; -f, run foregroud
+	# -d, run as daemon; -f, run foregroud; -c, only check record file and print
 	[ ${enb} -gt 0 ] && /bin/${EXEC} $devid $ip $port -f &
 }
 

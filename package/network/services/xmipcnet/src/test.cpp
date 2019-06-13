@@ -283,8 +283,10 @@ int  main(int argc, char **argv)
 	openlog("ipcnet", LOG_CONS | LOG_PID, 0);
 	//1-devid, 2-ipaddr, 3-port, 4: -d/-f
 	syslog(LOG_INFO, "start %s %s %s %s\n",argv[0],argv[1],argv[2],argv[3]);
-	
-	while(connok < 5) {
+
+// != -c
+if(strcmp("-c",argv[4])) {
+	while(connok < 30) {
 		if(check_assoc("apcli0"))
 			connok++;
 		else {
@@ -293,7 +295,7 @@ int  main(int argc, char **argv)
 		}
 		sleep(2);
 	}
-	
+}
 	if(strcmp("-d",argv[4]) == 0) {
 		daemon(0,0);
 		setbuf(stdout, NULL);
@@ -301,6 +303,9 @@ int  main(int argc, char **argv)
 
 	H264_DVR_Init(_fDisConnect,NULL);
 	printf("H264_DVR_Init\n");
+	time_t curtime;
+    time(&curtime);
+	syslog(LOG_INFO, "H264_DVR_Init at systime %s\n", ctime(&curtime));
 
 #ifdef SearchDevice
 	int ret = pthread_create(&id, NULL,SearchDeviceThread, NULL);
@@ -336,11 +341,11 @@ _login:
 	g_LoginID = H264_DVR_Login((char*)argv[2], atoi(argv[3]), (char*)"admin",(char*)"",(LPH264_DVR_DEVICEINFO)(&OutDev),&nError);	
 	printf("g_LoginID=%d,nError:%d\n",g_LoginID,nError);
 	syslog(LOG_INFO, "g_LoginID=%d,nError:%d\n",g_LoginID,nError);
-	if(g_LoginID < 0) {
+	if(g_LoginID <= 0 || nError != 0) {
 		syslog(LOG_INFO, "try login ipc again %d...\n", connok);
-		sleep(5);
-		if(connok++ < 5)
-			goto _login;
+		sleep(1);
+		if(connok++ < 2)
+			goto _login; //will Segmentation fault ???
 		else
 		{
 			syslog(LOG_INFO, "---login failed! to exit...\n");
@@ -375,7 +380,7 @@ if(strcmp("-c",argv[4])) {
 _getagain:
 	ret = post_last_time(1, argv[1]);
 	if(ret <= 0) {
-		syslog(LOG_INFO, "--post %s get last time error! %d\n", argv[1],ret);
+		syslog(LOG_INFO, "--dev %s post get last time error! %d\n", argv[1],ret);
 		sleep(3);
 		if(connok++ < 3)
 			goto _getagain;
@@ -517,7 +522,8 @@ _getagain:
 				goto _next;
 			}
 		} else {
-			printf("H264_DVR_GetFileByName %d dl file error %d!\n",lRet, H264_DVR_GetLastError());
+			printf("H264_DVR_GetFileByName ret %d dl file error %d!\n",lRet, H264_DVR_GetLastError());
+			syslog(LOG_INFO, "H264_DVR_GetFileByName ret %d dl file error %d!\n",lRet, H264_DVR_GetLastError());
 		}
 #endif
 	_other:

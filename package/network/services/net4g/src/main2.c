@@ -47,6 +47,10 @@
 #define LOCKFILE "/var/run/net4g.pid"
 #define LOCKMODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)
 
+#define WTD_TRIG	"/sys/class/leds/heart/trigger"
+#define WTD_BRIG	"/sys/class/leds/heart/brightness"
+#define WTD_CTRL	"/tmp/heartbeatctrl"
+
 #if 1
 #include "debug.h"
 #else
@@ -155,6 +159,11 @@ void read_file(char *file,char *buf,int len)
 
 void record2file(char *file,char *buf,int len)
 {
+	if(access(WTD_CTRL, F_OK) == 0) {
+		if(strstr(file, WTD_BRIG) || strstr(file, WTD_BRIG)) {
+			return;
+		}
+	}
 	FILE *fp = fopen(file,"w+");
 	if(!fp)
 		return;
@@ -162,6 +171,11 @@ void record2file(char *file,char *buf,int len)
 	if(ret != len)
 		WARN("WARN!write file %s!acture size %d<%d\n",file,ret,len);
 	fclose(fp);
+}
+
+void touchfile(char *file)
+{
+	record2file(file, "none", 4);
 }
 
 void json_test()
@@ -979,7 +993,22 @@ void termination_handler(int sig)
 {
 	WARN("\n-------Catch Signal %d, Main Process Exit.-------\n",sig);
 	exit_flag = 1;
+	if(glb_remote_socket > 0) close(glb_remote_socket);
+	sync();
 	exit(1);
+}
+
+void sigusr_handler(int sig)
+{
+	if(sig == SIGUSR1) {
+		NOTE("---to stop heartbeat watchdog---\n");
+		touchfile(WTD_CTRL);
+	} else if(sig == SIGUSR2) {
+		NOTE("---to resume heartbeat watchdog---\n");
+		unlink(WTD_CTRL);
+		record2file(WTD_TRIG,"none",4);
+		record2file(WTD_BRIG,"0",1);
+	}
 }
 
 /** @internal 
@@ -994,6 +1023,18 @@ static void init_signals(void) {
 	sa.sa_flags = SA_RESTART;
 	if (sigaction(SIGCHLD, &sa, NULL) == -1) {
 		ERROR("sigaction(): %s", strerror(errno));
+		exit(1);
+	}
+
+	NOTE("Setting SIGUSR1/2  handler to stop/resume heartbeat watchdog\n");
+	sa.sa_handler = sigusr_handler;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGUSR1, &sa, NULL) == -1) {
+		ERROR("sigaction(): %s\n", strerror(errno));
+		exit(1);
+	}
+	if (sigaction(SIGUSR2, &sa, NULL) == -1) {
+		ERROR("sigaction(): %s\n", strerror(errno));
 		exit(1);
 	}
 
@@ -1468,9 +1509,6 @@ static int handle_msg(int socket, char *recv_buf)
 #define GPIOCTRL_INFO	"\"type\":\"gpiotype\""	
 #define RESP_INFO		"respcode"	
 
-#define WTD_TRIG	"/sys/class/leds/heart/trigger"
-#define WTD_BRIG	"/sys/class/leds/heart/brightness"
-
 int main(int argc,char **argv)
 {
 	if(argc >=2 && strcmp(argv[1],"-d") == 0) {
@@ -1606,8 +1644,8 @@ int main(int argc,char **argv)
 		
 		FD_ZERO(&fds);
 		FD_SET(socket, &fds); 
-		/* init socket timeout, set to 60 seconds */
-		tv.tv_sec = 60;
+		/* init socket timeout, set to 90 seconds , keepalive=90s,5,9count*/
+		tv.tv_sec = 90;
 		tv.tv_usec = 0;
 
 		//server handle socket event
@@ -1628,6 +1666,10 @@ int main(int argc,char **argv)
 				ERROR("Error send gpsinfo!\n");
 				goto DISCONN;
 			} else {
+				if(failcount++ > 3) {
+					ERROR("----Send-Q++, Recv-Q == 0---\n");
+					goto DISCONN;
+				}
 				record2file(WTD_BRIG,"0",1);
 				continue;
 			}
