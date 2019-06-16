@@ -30,8 +30,8 @@ then
 	#killall -usr1 net4g
 	
 	#echo timer > /sys/class/leds/heart/trigger
-	#echo 300 > /sys/class/leds/heart/delay_on
-	#echo 700 > /sys/class/leds/heart/delay_off
+	#echo 700 > /sys/class/leds/heart/delay_on  //low
+	#echo 300 > /sys/class/leds/heart/delay_off //high
 	
 	pidof ap_client || /usr/bin/ap_client /etc/wifi_up_list
 	pidof xmipcnet || /sbin/ipc_renew.sh

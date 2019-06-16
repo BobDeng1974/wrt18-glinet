@@ -247,8 +247,8 @@ void* _post_handle(void *arg)
 void _resp_mcu_heart()
 {
 	system("echo timer > /sys/class/leds/heart/trigger");
-	system("echo 300 > /sys/class/leds/heart/delay_on");
-	system("echo 700 > /sys/class/leds/heart/delay_off");
+	system("echo 700 > /sys/class/leds/heart/delay_on");
+	system("echo 300 > /sys/class/leds/heart/delay_off");
 }
 
 void _fDisConnect(long lLoginID, char *pchDVRIP, long nDVRPort, unsigned long dwUser)
@@ -408,9 +408,9 @@ _getagain:
 	findInfo.endTime.dwYear = now->tm_year+1900;
 	findInfo.endTime.dwMonth = now->tm_mon+1;
 	findInfo.endTime.dwDay = now->tm_mday;
-	findInfo.endTime.dwHour = 23;
-	findInfo.endTime.dwMinute = 59;
-	findInfo.endTime.dwSecond = 59;
+	findInfo.endTime.dwHour = now->tm_hour;
+	findInfo.endTime.dwMinute = now->tm_min;
+	findInfo.endTime.dwSecond = now->tm_sec;
 
 	H264_DVR_FILE_DATA *pData = new H264_DVR_FILE_DATA[128];
 	int nFindCount = 0;
