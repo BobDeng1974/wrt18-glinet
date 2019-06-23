@@ -286,7 +286,7 @@ int  main(int argc, char **argv)
 
 // != -c
 if(strcmp("-c",argv[4])) {
-	while(connok < 30) {
+	while(connok < 60) {
 		if(check_assoc("apcli0"))
 			connok++;
 		else {
@@ -305,7 +305,7 @@ if(strcmp("-c",argv[4])) {
 	printf("H264_DVR_Init\n");
 	time_t curtime;
     time(&curtime);
-	syslog(LOG_INFO, "H264_DVR_Init at systime %s\n", ctime(&curtime));
+	syslog(LOG_INFO, "==apcli0 OK. H264_DVR_Init at systime %s\n", ctime(&curtime));
 
 #ifdef SearchDevice
 	int ret = pthread_create(&id, NULL,SearchDeviceThread, NULL);
@@ -386,7 +386,10 @@ _getagain:
 			goto _getagain;
 
 		st = localtime(&last_tt);
-		st->tm_mon--; //last month
+		//st->tm_mon--; //last month
+		st->tm_hour = 0;
+		st->tm_min = 0;
+		st->tm_sec = 0;
 	} else {
 		last_tt = ret;
 		st = localtime(&last_tt);
@@ -608,8 +611,12 @@ _getagain:
 		printf("do NOT found any record file %d\n",nFindCount);
 		syslog(LOG_INFO, "do NOT found any record file %d\n",nFindCount);
 	}
-	syslog(LOG_INFO, "---resp mcu ,heart 300-700 ms\n");
-	_resp_mcu_heart();
+	
+	if(strcmp("-c",argv[4])) {
+		printf("---resp mcu ,heart 300H-700L ms\n");
+		syslog(LOG_INFO, "---resp mcu ,heart 300H-700L ms\n");
+		_resp_mcu_heart();
+	}
 	
  	if(g_LoginID>0)
  	{

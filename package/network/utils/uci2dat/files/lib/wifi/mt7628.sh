@@ -29,7 +29,7 @@ detect_mt7628() {
 	cat >> /etc/config/wireless <<EOF
 config wifi-device 'mt7628'
 	option type 'mt7628'
-	option htmode 'HT40'
+	option htmode 'HT20'
 	option txpower '20'
 	option hwmode '11ng'
 	option band '2G'

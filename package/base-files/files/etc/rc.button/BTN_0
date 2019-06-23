@@ -35,6 +35,7 @@ then
 	
 	pidof ap_client || /usr/bin/ap_client /etc/wifi_up_list
 	pidof xmipcnet || /sbin/ipc_renew.sh
+	touch /tmp/video_gpio_trigger
 
 elif [ "$SEEN" -eq 18 ]
 then
@@ -43,6 +44,7 @@ then
 
 	_video_ctrl_on_off 0
 	_resp_from_wdt_gpio 1
+	touch /tmp/video_gpio_trigger
 	
 elif [ "$SEEN" -eq 24 ]
 then
@@ -51,6 +53,7 @@ then
 	
 	_video_ctrl_on_off 1
 	_resp_from_wdt_gpio 1
+	rm -rf /tmp/video_gpio_trigger
 	
 elif [ "$SEEN" -gt 55 ]
 then

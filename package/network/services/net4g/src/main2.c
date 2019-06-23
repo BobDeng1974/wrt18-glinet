@@ -51,6 +51,8 @@
 #define WTD_BRIG	"/sys/class/leds/heart/brightness"
 #define WTD_CTRL	"/tmp/heartbeatctrl"
 
+#define VIDEO_GPIO_TRIGGER	"/tmp/video_gpio_trigger"
+
 #if 1
 #include "debug.h"
 #else
@@ -882,7 +884,13 @@ void* handle_timing_gpio(void *arg)
 		glb_auto_flag = 1;
 	}
 	while(!exit_flag) {
+		if(access(VIDEO_GPIO_TRIGGER, F_OK) == 0) {
+			NOTE("---ipc gpio is hold by gpio trigger---\n");
+			sleep_seconds_intr(60);
+			continue;
+		}
 		if(!glb_auto_flag) {
+			//glb_auto_flag will changed if get svr ctrl cmd;
 			NOTE("gpio ctrl waiting...\n");
 			sleep_seconds_intr(60);
 			continue;
@@ -1175,10 +1183,12 @@ static int handle_gpiotype(int socket, char *recv_buf)
 	lua_call_func("/etc/decode.lua","is_ctrlmsg_valid",
 				recv_buf,strlen(recv_buf),lua_ret);
 	if(strstr(lua_ret,"auto")) {
+		unlink(VIDEO_GPIO_TRIGGER);
 		glb_auto_flag = 1;
 		renew_auto_manual_file(recv_buf,strlen(recv_buf));
 		SEND_RESP(socket,"success","Ctrl GPIO OK:auto",seqnum,"gpiotype");
 	} else if(strstr(lua_ret,"manual")) {
+		unlink(VIDEO_GPIO_TRIGGER);
 		glb_auto_flag = 0;
 		renew_auto_manual_file(recv_buf,strlen(recv_buf));
 		SEND_RESP(socket,"success","Ctrl GPIO OK:manual",seqnum,"gpiotype");
@@ -1709,9 +1719,9 @@ int main(int argc,char **argv)
 		faild_login = 1;
 		if(socket > 0) close(socket);
 		socket = -1;
-		sleep_seconds_intr(25);
+		sleep_seconds_intr(20);
 		record2file(WTD_BRIG,"0",1);
-		sleep_seconds_intr(1);
+		sleep_seconds_intr(3);
 	} //end while(1)
 EXIT:
 	exit_flag = 1;
