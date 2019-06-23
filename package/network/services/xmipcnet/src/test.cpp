@@ -284,18 +284,46 @@ int  main(int argc, char **argv)
 	//1-devid, 2-ipaddr, 3-port, 4: -d/-f
 	syslog(LOG_INFO, "start %s %s %s %s\n",argv[0],argv[1],argv[2],argv[3]);
 
-// != -c
-if(strcmp("-c",argv[4])) {
-	while(connok < 60) {
-		if(check_assoc("apcli0"))
-			connok++;
-		else {
-			connok = 0;
-			syslog(LOG_INFO, "wifi up is disconnected");
+	// != -c
+	if(strcmp("-c",argv[4])) {
+		while(connok < 20) {
+			if(check_assoc("apcli0"))
+				connok++;
+			else {
+				connok = 0;
+				syslog(LOG_INFO, "wifi up is disconnected");
+			}
+			sleep(2);
 		}
-		sleep(2);
 	}
-}
+	connok = 0;
+	time_t curtime;
+    time(&curtime);
+
+	syslog(LOG_INFO, "==Apcli0 ok, at systime %s\n", ctime(&curtime));
+
+	//get svr cur time, sometime ntp svr is delaed
+	// != -c
+	if(strcmp("-c",argv[4])) {
+		while(connok < 3) {
+			ret = post_get_curtime();
+			if(ret > 0) {
+				printf("---get svr curtime utc %d---\n", ret);
+				syslog(LOG_INFO, "---get svr curtime utc %d---\n", ret);
+				curtime = ret;
+				if(0 != stime(&curtime)) {
+					printf("---stime failed,errno %d---\n", errno);
+					syslog(LOG_INFO, "---stime failed,errno %d---\n", errno);
+				}
+				break;
+			} else {
+				connok++;
+				syslog(LOG_INFO, "post_get_curtime failed %d\n", ret);
+			}
+			sleep(2);
+		}
+	}
+
 	if(strcmp("-d",argv[4]) == 0) {
 		daemon(0,0);
 		setbuf(stdout, NULL);
@@ -303,7 +331,7 @@ if(strcmp("-c",argv[4])) {
 
 	H264_DVR_Init(_fDisConnect,NULL);
 	printf("H264_DVR_Init\n");
-	time_t curtime;
+
     time(&curtime);
 	syslog(LOG_INFO, "==apcli0 OK. H264_DVR_Init at systime %s\n", ctime(&curtime));
 

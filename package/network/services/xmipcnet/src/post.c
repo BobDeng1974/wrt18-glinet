@@ -8,7 +8,7 @@
 #include <sys/select.h>
 #include <errno.h>
 #include <sys/stat.h> 
-
+#include <time.h>
 #include "post.h"
 
 
@@ -116,11 +116,18 @@ int _http_post(int sockfd,char *page,char *msg, int *rint)
         }
         ret = ret > sizeof(recvline) ? sizeof(recvline)-1: ret;
         recvline[ret] = '\0';
+
         if(strstr(recvline, "HTTP/1.1 200 OK\r\n")) {
             ptr = strstr(recvline, "Content-Length:");
             if(ptr) {
                 //printf("[http] response get\n%s\n", ptr);
                 ptr = strstr(recvline, "<int xmlns=\"http://www.3gvs.net/\">");
+                if(!ptr) {
+                    ptr = strstr(recvline, "<long xmlns=\"http://www.3gvs.net/\">");
+                    if(!ptr) {
+                        goto _err;
+                    }
+                }
                 //printf("<---[http] response get\n\t%s\n", ptr);
                 ret = 0;
                 if(ptr=strstr(ptr, "\">")) {
@@ -137,6 +144,7 @@ int _http_post(int sockfd,char *page,char *msg, int *rint)
                 }
             }
         }
+    _err:
         printf("http get response error!\n%s\n",recvline);
         ret = -3;
         //or continue to read until timeout???
@@ -144,6 +152,27 @@ int _http_post(int sockfd,char *page,char *msg, int *rint)
 	}
 _success:
     return ret;
+}
+
+int post_get_curtime(void)
+{
+    int curtime = 0;
+    int ret = 0;
+    int fd = 0;
+    fd = _http_connect(IP_ADDR, IP_PORT);
+    if(fd < 0)
+        return SOCK_ERR;
+
+    ret = _http_post(fd, PAGE_GET_CURTIME, "", &curtime);
+    printf("<---http get cur time, ret %d, get time %d\n", ret, curtime);
+	if(ret == 0) {
+		_http_close(fd);
+		return curtime;
+	} else {
+        _http_close(fd);
+		return ret;
+    }
+    return curtime;
 }
 
 int post_last_time(int type, char* devid)
@@ -331,19 +360,17 @@ int post_content2(int fd, int type, char *file, int position, char *data, int in
 int main()
 {
     //char msg[] = "1313413413erqerqefdfarweqre";
-    char *msg = malloc(204800);
-    memset(msg,'2',204800);
+
     int i = 0;
     int ret = 0;
     int pos = 0;
     
-    ret = post_start();
-    if(ret >= 0)
-        ret  = post_content(1,FILE_NAME, ret, msg,strlen(msg));
-    else
-    {
-        printf("post end!\n");
-    }
+    time_t tt;
+    ret = post_get_curtime();
+    //ret = post_last_time(1,"089231");
+    tt = ret;
+    printf("get curtime %d,[%s]\n",ret, ctime(&tt));
+    stime(&tt);
     return 0;
 }
 #endif

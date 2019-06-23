@@ -11,7 +11,7 @@ extern "C" {
 #define PAGE_CONTENT    "/ws/MobileFileUpload.asmx/UploadContent"
 #define PAGE_FINISH     "/ws/MobileFileUpload.asmx/UploadFinish"
 #define PAGE_LAST_TIME  "/ws/MobileFileUpload.asmx/GetLastUpload"
-
+#define PAGE_GET_CURTIME "/ws/mobilefileupload.asmx/GetServerTime"
 #define FILE_NAME       "xmipc_20190528173000_20190528175030_01.h264"
 
 #define MAXLINE 1024
@@ -22,6 +22,7 @@ extern "C" {
 
 #define SOCK_ERR		(-9)
 
+int post_get_curtime(void);
 int post_last_time(int type, char* devid);
 int post_start(int type, char *name, int *position);
 int post_finish(int fd, int type, char *name, int size);
